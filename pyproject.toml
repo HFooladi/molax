@@ -1,0 +1,73 @@
+[project]
+name = "molax"
+version = "0.1.0"
+description = "Molecular active learning with JAX"
+authors = [
+    {name = "Hossein Fooladi", email = "hossein.fooladi@gmail.com"},
+]
+dependencies = [
+    "jax",
+    "jaxlib",
+    "flax",
+    "optax",
+    "rdkit",
+    "pandas",
+    "numpy",
+    "tqdm",
+]
+requires-python = ">=3.8"
+readme = "README.md"
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "black>=23.0",
+    "ruff>=0.0.291",
+    "mypy>=1.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["molax*"]
+exclude = ["tests*"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+include = '\.pyi?$'
+
+[tool.ruff]
+line-length = 88
+select = [
+    "E",  # pycodestyle errors
+    "F",  # pyflakes
+    "I",  # isort
+]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+
+[project.urls]
+Homepage = "https://github.com/hfooladi/molax"
+Repository = "https://github.com/hfooladi/molax"
+Documentation = "https://github.com/hfooladi/molax#readme"
+"Bug Tracker" = "https://github.com/hfooladi/molax/issues"

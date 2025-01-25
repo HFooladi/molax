@@ -79,6 +79,6 @@ MIT License
   title={molax: Molecular Active Learning with JAX},
   author={Hosein Fooladi},
   year={2025},
-  url={https://github.com/HFooladi/molax}
+  url={https://github.com/hfooladi/molax}
 }
 ```
