@@ -1,6 +1,11 @@
+# ruff: noqa
+[build-system]
+requires = ["hatchling>=1.18.0", "hatch-vcs>=0.3.0"]
+build-backend = "hatchling.build"
+
 [project]
 name = "molax"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Molecular active learning with JAX"
 authors = [
     {name = "Hossein Fooladi", email = "hossein.fooladi@gmail.com"},
@@ -30,9 +35,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
-[build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+
 
 [project.optional-dependencies]
 dev = [
@@ -42,9 +45,16 @@ dev = [
     "mypy>=1.0",
 ]
 
-[tool.setuptools.packages.find]
-include = ["molax*"]
-exclude = ["tests*"]
+[tool.hatch.build.targets.wheel]
+packages = ["molax"]
+
+[tool.hatch.version]
+source = "vcs"
+path = "molax/_version.py"
+
+[tool.hatch-vcs]
+version-file = "molax/_version.py"
+tag-pattern = "v[0-9]*"
 
 [tool.black]
 line-length = 88
