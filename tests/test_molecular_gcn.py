@@ -124,8 +124,9 @@ class TestMolecularGCN:
         # Use a fixed dropout key for deterministic testing
         dropout_key = jax.random.PRNGKey(123)
         dropout_rngs = nnx.Rngs(dropout=dropout_key, params=self.key)
+        config.rngs = dropout_rngs
         
-        model = MolecularGCN(config, rngs=dropout_rngs)
+        model = MolecularGCN(config)
         
         # In inference mode (default)
         output_inference = model(self.node_features, self.chain_adj)
@@ -203,13 +204,16 @@ class TestMolecularGCN:
         model2 = MolecularGCN(config)
         
         # Outputs should be identical with same initialization and inputs
-        output1 = model1(self.node_features, self.chain_adj)
-        output2 = model2(self.node_features, self.chain_adj)
+        output1 = model1(self.node_features, self.chain_adj, training=False)
+        output2 = model2(self.node_features, self.chain_adj, training=False)
         
         np.testing.assert_allclose(output1, output2, rtol=1e-5)
         
         # Models with different seeds should give different outputs
+        dropout_key = jax.random.PRNGKey(123)
+        dropout_rngs = nnx.Rngs(dropout=dropout_key, params=self.key)
+        config.rngs = dropout_rngs
         model3 = MolecularGCN(config)
         
-        output3 = model3(self.node_features, self.chain_adj)
+        output3 = model3(self.node_features, self.chain_adj, training=False)
         assert not jnp.allclose(output1, output3) 

@@ -15,7 +15,7 @@ class GCNLayerConfig:
     in_features: int
     out_features: int
     use_bias: bool = True
-    rngs: nnx.Rngs = nnx.Rngs()
+    rngs: nnx.Rngs = nnx.Rngs(0)
 
 class GCNLayer(nnx.Module):
     """Graph Convolutional Layer implementation following Kipf & Welling (ICLR 2017).
@@ -77,7 +77,7 @@ class MolecularGCNConfig:
     hidden_features: Sequence[int]
     out_features: int
     dropout_rate: float = 0.1
-    rngs: nnx.Rngs = nnx.Rngs()
+    rngs: nnx.Rngs = nnx.Rngs(0)
 
 class MolecularGCN(nnx.Module):
     """Molecular Graph Convolutional Network for molecular property prediction.
@@ -151,7 +151,7 @@ class UncertaintyGCNConfig:
     output_features: int
     dropout_rate: float = 0.1
     n_heads: int = 2  # Number of output heads for uncertainty
-    rngs: nnx.Rngs = nnx.Rngs()
+    rngs: nnx.Rngs = nnx.Rngs(0)
 
 class UncertaintyGCN(nnx.Module):
     """Uncertainty-aware Graph Convolutional Network for probabilistic predictions.
