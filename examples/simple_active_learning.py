@@ -6,7 +6,7 @@ from molax.utils.data import MolecularDataset
 import optax
 import flax.nnx as nnx
 # Load dataset
-dataset = MolecularDataset('data/molecules.csv')
+dataset = MolecularDataset('datasets/molecules.csv')
 train_data, test_data = dataset.split_train_test(test_size=0.2, seed=42)
 
 # Initialize model

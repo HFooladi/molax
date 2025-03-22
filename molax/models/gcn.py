@@ -226,19 +226,6 @@ class UncertaintyGCN(nnx.Module):
         # Return mean and variance (exp of log_var)
         return mean, jnp.exp(log_var)
 
-def create_model(config: UncertaintyGCNConfig) -> Tuple[UncertaintyGCN, Dict]:
-    """Create and initialize an uncertainty-aware GCN model.
-    
-    Args:
-        config: Configuration for the model architecture
-        
-    Returns:
-        Tuple of (model, initialized_variables)
-    """
-    model = UncertaintyGCN(config)
-    # Initialize with dummy inputs
-    variables = model.init(jax.random.PRNGKey(0), jnp.ones((5, 10)), jnp.ones((5, 5)))
-    return model, variables
 
 def create_train_step(model: UncertaintyGCN, learning_rate: float = 1e-3):
     """Create a jitted training step function for the uncertainty-aware GCN.
@@ -256,37 +243,37 @@ def create_train_step(model: UncertaintyGCN, learning_rate: float = 1e-3):
     
     @jax.jit
     def train_step(
-        variables: Dict,
+        model: UncertaintyGCN,
         batch: Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray],
         key: jnp.ndarray
     ) -> Tuple[float, Dict]:
         """Perform a single training step.
         
         Args:
-            variables: Model parameters
+            model: Model parameters
             batch: Tuple of (node_features, adjacency_matrix, target)
             key: JAX PRNG key for randomness
             
         Returns:
             Tuple of (loss, updated_variables)
         """
-        def loss_fn(params):
+        def loss_fn(model):
             x, adj, y = batch
-            mean, var = model.apply(params, x, adj, training=True)
+            mean, var = model(x, adj, training=True)
             # Negative log-likelihood for a Gaussian: 0.5 * (log(var) + (y-mean)²/var)
             nll = 0.5 * jnp.sum(jnp.log(var) + (y - mean)**2 / var)
             return nll
         
         # Compute loss and gradients
-        loss, grads = jax.value_and_grad(loss_fn)(variables)
+        loss, grads = jax.value_and_grad(loss_fn)(model)
         
         # Update parameters with simple SGD
         # Note: In practice, you might want to use optimizers from optax
-        variables = jax.tree_map(
+        model = jax.tree_map(
             lambda p, g: p - learning_rate * g,
-            variables,
+            model,
             grads
         )
-        return loss, variables
+        return loss, model
     
     return train_step
