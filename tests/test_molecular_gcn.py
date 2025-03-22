@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import flax.nnx as nnx
 
-from molax.models.gcn import MolecularGCN, MolecularGCNConfig, GCNLayer, GCNLayerConfig
+from molax.models.gcn import MolecularGCN, MolecularGCNConfig
 
 
 class TestMolecularGCN:
@@ -14,7 +14,9 @@ class TestMolecularGCN:
         """Set up test fixtures."""
         # Fixed random seed for reproducibility
         self.key = jax.random.PRNGKey(42)
-        self.rngs = nnx.Rngs(params=self.key)
+        self.default_key = jax.random.PRNGKey(42)
+        self.params_key = jax.random.PRNGKey(12)
+        self.dropout_key = jax.random.PRNGKey(123)
         
         # Default test dimensions
         self.num_nodes = 6
@@ -48,11 +50,12 @@ class TestMolecularGCN:
     def test_init(self):
         """Test MolecularGCN initialization."""
         # Test with default dropout rate
+        rngs = nnx.Rngs(self.default_key, params=self.params_key, dropout=self.dropout_key)
         config = MolecularGCNConfig(
             in_features=self.in_features,
             hidden_features=self.hidden_features,
             out_features=self.out_features,
-            rngs=self.rngs
+            rngs=rngs
         )
         model = MolecularGCN(config)
         
@@ -77,18 +80,19 @@ class TestMolecularGCN:
             hidden_features=self.hidden_features,
             out_features=self.out_features,
             dropout_rate=custom_dropout,
-            rngs=self.rngs
+            rngs=rngs
         )
         model_custom = MolecularGCN(config_custom)
         assert model_custom.dropout.rate == custom_dropout
 
     def test_forward_shape(self):
         """Test that forward pass produces correct output shapes."""
+        rngs = nnx.Rngs(self.default_key, params=self.params_key, dropout=self.dropout_key)
         config = MolecularGCNConfig(
             in_features=self.in_features,
             hidden_features=self.hidden_features,
             out_features=self.out_features,
-            rngs=self.rngs
+            rngs=rngs
         )
         model = MolecularGCN(config)
         
@@ -103,28 +107,18 @@ class TestMolecularGCN:
         # Test with star graph
         output = model(self.node_features, self.star_adj)
         assert output.shape == (self.out_features,)
-        
-        # Test with batch dimension
-        batch_size = 3
-        batched_features = jnp.stack([self.node_features] * batch_size)
-        batched_adj = jnp.stack([self.chain_adj] * batch_size)
-        
-        # Need to adjust the model to handle batched inputs or process each graph separately
 
     def test_training_mode(self):
         """Test that dropout is applied in training mode but not in inference mode."""
+        rngs = nnx.Rngs(self.default_key, params=self.params_key, dropout=self.dropout_key)
         # Use a high dropout rate to ensure visible effect
         config = MolecularGCNConfig(
             in_features=self.in_features,
             hidden_features=self.hidden_features,
             out_features=self.out_features,
-            dropout_rate=0.9  # Very high dropout for testing
+            dropout_rate=0.9,  # Very high dropout for testing
+            rngs=rngs
         )
-        
-        # Use a fixed dropout key for deterministic testing
-        dropout_key = jax.random.PRNGKey(123)
-        dropout_rngs = nnx.Rngs(dropout=dropout_key, params=self.key)
-        config.rngs = dropout_rngs
         
         model = MolecularGCN(config)
         
@@ -140,33 +134,6 @@ class TestMolecularGCN:
         # Multiple forward passes in inference mode should be identical
         output_inference2 = model(self.node_features, self.chain_adj)
         np.testing.assert_allclose(output_inference, output_inference2)
-        
-        # Multiple forward passes in training mode may be different due to dropout
-        # But this is probabilistic, so we don't assert on it
-
-    def test_pooling(self):
-        """Test that global pooling works correctly."""
-        config = MolecularGCNConfig(
-            in_features=self.in_features,
-            hidden_features=[8],  # Single layer for simplicity
-            out_features=self.out_features,
-            rngs=self.rngs
-        )
-        model = MolecularGCN(config)
-        
-        # Create a simple case where we can predict the outcome
-        # Use node features where each node has the same features
-        constant_features = jnp.ones((self.num_nodes, self.in_features))
-        
-        # Mock the internal behavior to isolate pooling
-        # After GCN layers, we should have node features that we can then verify pooling on
-        layer_output = jnp.ones((self.num_nodes, 8))  # Pretend output from GCN layers
-        
-        # Manual pooling (mean)
-        expected_pooled = jnp.mean(layer_output, axis=0)
-        
-        # We can't directly access the pooling, but we can verify the final output
-        # would be consistent with our expected pooling
 
     def test_multiple_gcn_layers(self):
         """Test that multiple GCN layers are applied correctly."""
@@ -174,11 +141,12 @@ class TestMolecularGCN:
         for num_layers in [1, 2, 3]:
             hidden_features = [8] * num_layers
             
+            rngs = nnx.Rngs(self.default_key, params=self.params_key, dropout=self.dropout_key)
             config = MolecularGCNConfig(
                 in_features=self.in_features,
                 hidden_features=hidden_features,
                 out_features=self.out_features,
-                rngs=self.rngs
+                rngs=rngs
             )
             model = MolecularGCN(config)
             
@@ -191,29 +159,44 @@ class TestMolecularGCN:
 
     def test_deterministic_output(self):
         """Test that the model produces deterministic outputs with same seed."""
-        config = MolecularGCNConfig(
+        # Same seed should produce same results
+        rngs1 = nnx.Rngs(self.default_key, params=self.params_key, dropout=self.dropout_key)
+        config1 = MolecularGCNConfig(
             in_features=self.in_features,
             hidden_features=self.hidden_features,
             out_features=self.out_features,
-            rngs=self.rngs
+            rngs=rngs1
         )
+        model1 = MolecularGCN(config1)
         
-        # Create two models with same seed
-        model1 = MolecularGCN(config)
-        
-        model2 = MolecularGCN(config)
+        rngs2 = nnx.Rngs(self.default_key, params=self.params_key, dropout=self.dropout_key)
+        config2 = MolecularGCNConfig(
+            in_features=self.in_features,
+            hidden_features=self.hidden_features,
+            out_features=self.out_features,
+            rngs=rngs2
+        )
+        model2 = MolecularGCN(config2)
         
         # Outputs should be identical with same initialization and inputs
-        output1 = model1(self.node_features, self.chain_adj, training=False)
-        output2 = model2(self.node_features, self.chain_adj, training=False)
+        output1 = model1(self.node_features, self.chain_adj)
+        output2 = model2(self.node_features, self.chain_adj)
         
         np.testing.assert_allclose(output1, output2, rtol=1e-5)
         
         # Models with different seeds should give different outputs
-        dropout_key = jax.random.PRNGKey(123)
-        dropout_rngs = nnx.Rngs(dropout=dropout_key, params=self.key)
-        config.rngs = dropout_rngs
-        model3 = MolecularGCN(config)
+        # different seeds for params and dropout
+        params_key = jax.random.PRNGKey(43)
+        dropout_key = jax.random.PRNGKey(124)
+        rngs3 = nnx.Rngs(self.default_key, params=params_key, dropout=dropout_key)
+        config3 = MolecularGCNConfig(
+            in_features=self.in_features,
+            hidden_features=self.hidden_features,
+            out_features=self.out_features,
+            rngs=rngs3
+        )
+        model3 = MolecularGCN(config3)
         
-        output3 = model3(self.node_features, self.chain_adj, training=False)
+        output3 = model3(self.node_features, self.chain_adj)
+        # Different parameter initialization should produce different results
         assert not jnp.allclose(output1, output3) 

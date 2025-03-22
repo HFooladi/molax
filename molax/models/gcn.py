@@ -77,7 +77,7 @@ class MolecularGCNConfig:
     hidden_features: Sequence[int]
     out_features: int
     dropout_rate: float = 0.1
-    rngs: nnx.Rngs = nnx.Rngs(0)
+    rngs: nnx.Rngs = nnx.Rngs(0, params=1, dropout=2)
 
 class MolecularGCN(nnx.Module):
     """Molecular Graph Convolutional Network for molecular property prediction.
@@ -97,12 +97,26 @@ class MolecularGCN(nnx.Module):
         # Initialize GCN layers
         # first layer has in_features = config.in_features
         # all other layers have in_features = out_features of previous layer
-        self.gcn_layers = [GCNLayer(GCNLayerConfig(in_features=self.config.in_features, out_features=self.config.hidden_features[0], rngs=self.config.rngs))]
-        for in_features, out_features in zip(self.config.hidden_features[0:-1], self.config.hidden_features[1:]):
-            self.gcn_layers.append(GCNLayer(GCNLayerConfig(in_features=in_features, out_features=out_features, rngs=self.config.rngs)))
+
+
+        self.gcn_layers = []
+        in_features = self.config.in_features
+        for out_features in self.config.hidden_features:
+            self.gcn_layers.append(
+                GCNLayer(GCNLayerConfig(
+                    in_features=in_features,
+                    out_features=out_features,
+                    rngs=self.config.rngs
+                ))
+            )
+            in_features = out_features
         
         # Final prediction layer
-        self.output = nnx.Linear(in_features=self.config.hidden_features[-1], out_features=self.config.out_features, rngs=self.config.rngs)
+        self.output = nnx.Linear(
+            in_features=self.config.hidden_features[-1],
+            out_features=self.config.out_features,
+            rngs=self.config.rngs
+        )
         
         # Dropout layer for regularization
         self.dropout = nnx.Dropout(rate=self.config.dropout_rate, rngs=self.config.rngs)
