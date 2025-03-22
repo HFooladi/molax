@@ -156,16 +156,18 @@ class UncertaintyGCNConfig:
     """Configuration for Uncertainty-aware Graph Convolutional Network.
     
     Attributes:
+        in_features: Dimension of the input features
         hidden_features: Sequence of feature dimensions for each GCN layer
         output_features: Dimension of the final output
         dropout_rate: Rate for dropout regularization
         n_heads: Number of output heads for uncertainty (typically 2 for mean/variance)
     """
+    in_features: int
     hidden_features: Sequence[int]
-    output_features: int
+    out_features: int
     dropout_rate: float = 0.1
     n_heads: int = 2  # Number of output heads for uncertainty
-    rngs: nnx.Rngs = nnx.Rngs(0)
+    rngs: nnx.Rngs = nnx.Rngs(0, params=1, dropout=2)
 
 class UncertaintyGCN(nnx.Module):
     """Uncertainty-aware Graph Convolutional Network for probabilistic predictions.
@@ -186,15 +188,16 @@ class UncertaintyGCN(nnx.Module):
         
         # Base GCN model for feature extraction
         self.base_model = MolecularGCN(MolecularGCNConfig(
+            in_features=self.config.in_features,
             hidden_features=self.config.hidden_features,
-            output_features=self.config.hidden_features[-1],
+            out_features=self.config.out_features,
             dropout_rate=self.config.dropout_rate,
             rngs=self.config.rngs
         ))
         
         # Separate prediction heads for mean and uncertainty
-        self.mean_head = nnx.Linear(in_features=self.config.output_features, out_features=self.config.output_features, rngs=self.config.rngs)
-        self.var_head = nnx.Linear(in_features=self.config.output_features, out_features=self.config.output_features, rngs=self.config.rngs)
+        self.mean_head = nnx.Linear(in_features=self.config.out_features, out_features=self.config.out_features, rngs=self.config.rngs)
+        self.var_head = nnx.Linear(in_features=self.config.out_features, out_features=self.config.out_features, rngs=self.config.rngs)
     
     def __call__(
         self, 
