@@ -2,9 +2,9 @@ import jax.numpy as jnp
 import pandas as pd
 from rdkit import Chem
 from rdkit.Chem import AllChem
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Union
 import numpy as np
-
+from pathlib import Path
 def smiles_to_graph(smiles: str) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Convert SMILES string to molecular graph representation.
     
@@ -47,15 +47,18 @@ def smiles_to_graph(smiles: str) -> Tuple[jnp.ndarray, jnp.ndarray]:
     return jnp.array(node_features), jnp.array(adjacency)
 
 class MolecularDataset:
-    def __init__(self, csv_path: str, smiles_col: str = 'smiles', label_col: str = 'labels'):
+    def __init__(self, df: Union[pd.DataFrame, str], smiles_col: str = 'smiles', label_col: str = 'label'):
         """Load molecular dataset from CSV file.
         
         Args:
-            csv_path: Path to CSV file
+            df: DataFrame or path to CSV file
             smiles_col: Name of SMILES column
             label_col: Name of labels column
         """
-        self.df = pd.read_csv(csv_path)
+        if isinstance(df, str) or isinstance(df, Path):
+            self.df = pd.read_csv(df)
+        else:
+            self.df = df
         self.smiles_col = smiles_col
         self.label_col = label_col
         
@@ -69,6 +72,12 @@ class MolecularDataset:
                 print(f"Skipping invalid SMILES: {e}")
         
         self.labels = jnp.array(self.df[label_col])
+    
+    def __len__(self):
+        return len(self.graphs)
+    
+    def __getitem__(self, index: int) -> Tuple[Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray]:
+        return self.graphs[index], self.labels[index]
         
     def get_batch(self, indices: List[int]) -> Tuple[List[Tuple[jnp.ndarray, jnp.ndarray]], jnp.ndarray]:
         """Get batch of molecular graphs and labels.
@@ -96,7 +105,7 @@ class MolecularDataset:
         if seed is not None:
             np.random.seed(seed)
             
-        n_samples = len(self.df)
+        n_samples = len(self)
         n_test = int(test_size * n_samples)
         
         indices = np.random.permutation(n_samples)
@@ -106,15 +115,8 @@ class MolecularDataset:
         train_df = self.df.iloc[train_indices].reset_index(drop=True)
         test_df = self.df.iloc[test_indices].reset_index(drop=True)
         
-        train_dataset = MolecularDataset(csv_path='', smiles_col=self.smiles_col, label_col=self.label_col)
-        train_dataset.df = train_df
-        train_dataset.graphs = [self.graphs[i] for i in train_indices]
-        train_dataset.labels = self.labels[train_indices]
-        
-        test_dataset = MolecularDataset(csv_path='', smiles_col=self.smiles_col, label_col=self.label_col)
-        test_dataset.df = test_df
-        test_dataset.graphs = [self.graphs[i] for i in test_indices]
-        test_dataset.labels = self.labels[test_indices]
+        train_dataset = MolecularDataset(df=train_df, smiles_col=self.smiles_col, label_col=self.label_col)
+        test_dataset = MolecularDataset(df=test_df, smiles_col=self.smiles_col, label_col=self.label_col)
         
         return train_dataset, test_dataset
 
