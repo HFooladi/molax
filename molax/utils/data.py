@@ -5,6 +5,7 @@ from rdkit.Chem import AllChem
 from typing import Tuple, List, Optional, Union
 import numpy as np
 from pathlib import Path
+from .logger import logger
 
 def smiles_to_graph(smiles: str) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Convert SMILES string to molecular graph representation.
@@ -29,15 +30,19 @@ def smiles_to_graph(smiles: str) -> Tuple[jnp.ndarray, jnp.ndarray]:
     Raises:
         ValueError: If the SMILES string is invalid and cannot be parsed
     """
+    logger.debug(f"Converting SMILES to graph: {smiles}")
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
-        raise ValueError(f"Invalid SMILES string: {smiles}")
+        error_msg = f"Invalid SMILES string: {smiles}"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
     
     # Get atom features
     atoms = mol.GetAtoms()
     n_atoms = len(atoms)
+    logger.debug(f"Processing molecule with {n_atoms} atoms")
     
-    # Atom features: [atomic_num, degree, formal_charge, chiral_tag, hybridization, aromacity, is_in_ring]
+    # Atom features: [atomic_num, degree, formal_charge, chiral_tag, hybridization, aromacity]
     node_features = []
     for atom in atoms:
         features = [
@@ -47,7 +52,6 @@ def smiles_to_graph(smiles: str) -> Tuple[jnp.ndarray, jnp.ndarray]:
             atom.GetChiralTag(),
             atom.GetHybridization(),
             atom.GetIsAromatic(),
-            atom.IsInRing(),
         ]
         node_features.append(features)
     
@@ -60,6 +64,7 @@ def smiles_to_graph(smiles: str) -> Tuple[jnp.ndarray, jnp.ndarray]:
         adjacency[i, j] = float(bond_type)
         adjacency[j, i] = float(bond_type)
     
+    logger.debug(f"Successfully converted SMILES to graph with {n_atoms} atoms")
     return jnp.array(node_features), jnp.array(adjacency)
 
 class MolecularDataset:
@@ -89,23 +94,45 @@ class MolecularDataset:
         Raises:
             ValueError: If the specified column names are not found in the DataFrame
         """
+        logger.info(f"Initializing MolecularDataset with columns: {smiles_col} (SMILES), {label_col} (labels)")
+        
         if isinstance(df, str) or isinstance(df, Path):
+            logger.info(f"Loading data from file: {df}")
             self.df = pd.read_csv(df)
         else:
+            logger.info("Using provided DataFrame")
             self.df = df
+            
         self.smiles_col = smiles_col
         self.label_col = label_col
         
+        # Validate columns
+        if smiles_col not in self.df.columns:
+            error_msg = f"SMILES column '{smiles_col}' not found in DataFrame"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        if label_col not in self.df.columns:
+            error_msg = f"Label column '{label_col}' not found in DataFrame"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
         # Convert SMILES to graphs
+        logger.info("Converting SMILES strings to molecular graphs")
         self.graphs = []
+        invalid_smiles = 0
         for smiles in self.df[smiles_col]:
             try:
                 graph = smiles_to_graph(smiles)
                 self.graphs.append(graph)
             except ValueError as e:
-                print(f"Skipping invalid SMILES: {e}")
+                logger.warning(f"Skipping invalid SMILES: {e}")
+                invalid_smiles += 1
+        
+        if invalid_smiles > 0:
+            logger.warning(f"Skipped {invalid_smiles} invalid SMILES strings")
         
         self.labels = jnp.array(self.df[label_col])
+        logger.info(f"Dataset initialized with {len(self)} valid molecules")
     
     def __len__(self) -> int:
         """Get the number of molecules in the dataset.
@@ -126,6 +153,7 @@ class MolecularDataset:
                 - graph: Tuple of (node_features, adjacency_matrix)
                 - label: jnp.ndarray containing the molecule's label
         """
+        logger.debug(f"Retrieving molecule at index {index}")
         return self.graphs[index], self.labels[index]
         
     def get_batch(self, indices: List[int]) -> Tuple[List[Tuple[jnp.ndarray, jnp.ndarray]], jnp.ndarray]:
@@ -143,6 +171,7 @@ class MolecularDataset:
                 - batch_graphs: List of (node_features, adjacency_matrix) tuples
                 - batch_labels: jnp.ndarray containing the labels for the batch
         """
+        logger.debug(f"Retrieving batch of {len(indices)} molecules")
         batch_graphs = [self.graphs[i] for i in indices]
         batch_labels = self.labels[indices]
         return batch_graphs, batch_labels
@@ -165,6 +194,7 @@ class MolecularDataset:
                 - train_dataset: MolecularDataset instance containing the training data
                 - test_dataset: MolecularDataset instance containing the test data
         """
+        logger.info(f"Splitting dataset with test_size={test_size}, seed={seed}")
         if seed is not None:
             np.random.seed(seed)
             
@@ -177,6 +207,8 @@ class MolecularDataset:
         
         train_df = self.df.iloc[train_indices].reset_index(drop=True)
         test_df = self.df.iloc[test_indices].reset_index(drop=True)
+        
+        logger.info(f"Split complete: {len(train_indices)} training samples, {len(test_indices)} test samples")
         
         train_dataset = MolecularDataset(df=train_df, smiles_col=self.smiles_col, label_col=self.label_col)
         test_dataset = MolecularDataset(df=test_df, smiles_col=self.smiles_col, label_col=self.label_col)
@@ -201,8 +233,10 @@ def collate_fn(batch_graphs: List[Tuple[jnp.ndarray, jnp.ndarray]]) -> Tuple[jnp
             - padded_adjacency: jnp.ndarray of shape (batch_size, max_nodes, max_nodes)
                                containing the padded adjacency matrices
     """
+    logger.debug(f"Collating batch of {len(batch_graphs)} graphs")
     # Find maximum number of nodes
     max_nodes = max(features.shape[0] for features, _ in batch_graphs)
+    logger.debug(f"Maximum number of nodes in batch: {max_nodes}")
     
     # Pad node features and adjacency matrices
     padded_features = []
@@ -222,4 +256,5 @@ def collate_fn(batch_graphs: List[Tuple[jnp.ndarray, jnp.ndarray]]) -> Tuple[jnp
         padded_a = padded_a.at[:n_nodes, :n_nodes].set(adjacency)
         padded_adjacency.append(padded_a)
     
+    logger.debug("Batch collation complete")
     return jnp.stack(padded_features), jnp.stack(padded_adjacency)
