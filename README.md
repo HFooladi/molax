@@ -1,7 +1,7 @@
 # molax
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.9%20%7C%203.10-blue.svg)](https://www.python.org/downloads/)
+[![Python Version](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11-blue.svg)](https://www.python.org/downloads/)
 [![Documentation Status](https://readthedocs.org/projects/molax/badge/?version=latest)](https://molax.readthedocs.io/en/latest/?badge=latest)
 [![Tests](https://github.com/HFooladi/molax/actions/workflows/tests.yml/badge.svg)](https://github.com/HFooladi/molax/actions/workflows/ci.yml)
 
