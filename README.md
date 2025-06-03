@@ -1,16 +1,22 @@
 # molax
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.9%20%7C%203.10-blue.svg)](https://www.python.org/downloads/)
+[![Python Version](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11-blue.svg)](https://www.python.org/downloads/)
 [![Documentation Status](https://readthedocs.org/projects/molax/badge/?version=latest)](https://molax.readthedocs.io/en/latest/?badge=latest)
-[![Tests](https://github.com/HFooladi/molax/actions/workflows/tests.yml/badge.svg)](https://github.com/HFooladi/molax/actions/workflows/tests.yml)
+[![Tests](https://github.com/HFooladi/molax/actions/workflows/tests.yml/badge.svg)](https://github.com/HFooladi/molax/actions/workflows/ci.yml)
 
 Molecular active learning with JAX - a lightweight framework for active learning in molecular property prediction.
+
+## Key Features
+
+- 🧠 Graph neural networks implemented in JAX/Flax for molecular representation learning
+- 🔄 Complete active learning workflow for molecular property prediction
+- 🎯 Multiple acquisition functions for diverse exploration strategies
 
 ## Installation
 
 ```bash
-git clone https://github.com/yourusername/molax
+git clone https://github.com/HFooladi/molax
 cd molax
 pip install -r requirements.txt
 ```
@@ -73,9 +79,6 @@ Check `examples/active_learning.py` for a complete active learning pipeline.
 4. Push to branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## License
-
-MIT License
 
 ## Citation
 
@@ -84,6 +87,17 @@ MIT License
   title={molax: Molecular Active Learning with JAX},
   author={Hosein Fooladi},
   year={2025},
-  url={https://github.com/hfooladi/molax}
+  url={https://github.com/hfooladi/molax},
+  description={A lightweight framework for active learning in molecular property prediction}
+
 }
 ```
+
+## License
+
+MIT License
+
+## Acknowledgements
+
+- This project builds upon the excellent JAX, Flax, and RDKit libraries.
+- Thanks to all contributors who have helped improve this project.
