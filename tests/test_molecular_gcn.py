@@ -9,7 +9,7 @@ from molax.models.gcn import MolecularGCN, MolecularGCNConfig
 class TestMolecularGCN:
     """Tests for the MolecularGCN implementation."""
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         """Set up test fixtures."""
         # Fixed random seed for reproducibility
         self.key = jax.random.PRNGKey(42)
@@ -47,7 +47,7 @@ class TestMolecularGCN:
             self.star_adj[0, i] = self.star_adj[i, 0] = 1.0
         self.star_adj = jnp.array(self.star_adj)
 
-    def test_init(self):
+    def test_init(self) -> None:
         """Test MolecularGCN initialization."""
         # Test with default dropout rate
         rngs = nnx.Rngs(
@@ -87,7 +87,7 @@ class TestMolecularGCN:
         model_custom = MolecularGCN(config_custom)
         assert model_custom.dropout.rate == custom_dropout
 
-    def test_forward_shape(self):
+    def test_forward_shape(self) -> None:
         """Test that forward pass produces correct output shapes."""
         rngs = nnx.Rngs(
             self.default_key, params=self.params_key, dropout=self.dropout_key
@@ -112,7 +112,7 @@ class TestMolecularGCN:
         output = model(self.node_features, self.star_adj)
         assert output.shape == (self.out_features,)
 
-    def test_training_mode(self):
+    def test_training_mode(self) -> None:
         """Test that dropout is applied in training mode but not in inference mode."""
         rngs = nnx.Rngs(
             self.default_key, params=self.params_key, dropout=self.dropout_key
@@ -141,7 +141,7 @@ class TestMolecularGCN:
         output_inference2 = model(self.node_features, self.chain_adj)
         np.testing.assert_allclose(output_inference, output_inference2)
 
-    def test_multiple_gcn_layers(self):
+    def test_multiple_gcn_layers(self) -> None:
         """Test that multiple GCN layers are applied correctly."""
         # Test with different numbers of hidden layers
         for num_layers in [1, 2, 3]:
@@ -165,7 +165,7 @@ class TestMolecularGCN:
             output = model(self.node_features, self.chain_adj)
             assert output.shape == (self.out_features,)
 
-    def test_deterministic_output(self):
+    def test_deterministic_output(self) -> None:
         """Test that the model produces deterministic outputs with same seed."""
         # Same seed should produce same results
         rngs1 = nnx.Rngs(

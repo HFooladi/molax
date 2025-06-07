@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict, Sequence, Tuple
+from typing import Callable, Sequence, Tuple
 
 import flax.nnx as nnx
 import jax
@@ -250,7 +250,9 @@ class UncertaintyGCN(nnx.Module):
         return mean, jnp.exp(log_var)
 
 
-def create_train_step(model: UncertaintyGCN, learning_rate: float = 1e-3):
+def create_train_step(
+    model: UncertaintyGCN, learning_rate: float = 1e-3
+) -> Callable[..., Tuple[float, UncertaintyGCN]]:
     """Create a jitted training step function for the uncertainty-aware GCN.
 
     This function implements training with a negative log-likelihood loss
@@ -269,7 +271,7 @@ def create_train_step(model: UncertaintyGCN, learning_rate: float = 1e-3):
         model: UncertaintyGCN,
         batch: Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray],
         key: jnp.ndarray,
-    ) -> Tuple[float, Dict]:
+    ) -> Tuple[float, UncertaintyGCN]:
         """Perform a single training step.
 
         Args:
@@ -281,7 +283,7 @@ def create_train_step(model: UncertaintyGCN, learning_rate: float = 1e-3):
             Tuple of (loss, updated_variables)
         """
 
-        def loss_fn(model):
+        def loss_fn(model: UncertaintyGCN) -> jnp.ndarray:
             x, adj, y = batch
             mean, var = model(x, adj, training=True)
             # Negative log-likelihood for a Gaussian: 0.5 * (log(var) + (y-mean)²/var)
@@ -296,4 +298,4 @@ def create_train_step(model: UncertaintyGCN, learning_rate: float = 1e-3):
         model = jax.tree_map(lambda p, g: p - learning_rate * g, model, grads)
         return loss, model
 
-    return train_step
+    return train_step  # type: ignore

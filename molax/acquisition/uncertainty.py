@@ -1,12 +1,10 @@
 from typing import Callable, List, Tuple
 
-import jax
 import jax.numpy as jnp
 
 
 def uncertainty_sampling(
-    model: Callable,
-    params: dict,
+    model: Callable[..., Tuple[jnp.ndarray, jnp.ndarray]],
     pool_data: List[Tuple[jnp.ndarray, jnp.ndarray]],
     n_samples: int = 10,
 ) -> jnp.ndarray:
@@ -17,7 +15,6 @@ def uncertainty_sampling(
 
     Args:
         model: UncertaintyGCN model that supports MC dropout during inference
-        params: Dictionary containing the model parameters
         pool_data: List of tuples containing (features, adjacency) matrices for each
                   molecule in the unlabeled pool. Features should be of shape
                   (n_nodes, n_features) and adjacency matrices should be of shape
@@ -36,10 +33,7 @@ def uncertainty_sampling(
         # Collect MC samples
         predictions = []
         for _ in range(n_samples):
-            rng = jax.random.PRNGKey(0)  # You'd want to properly manage seeds
-            mean, var = model.apply(
-                params, x, adj, training=True, rngs={"dropout": rng}
-            )
+            mean, var = model(x, adj, training=True)
             predictions.append(mean)
 
         # Calculate predictive uncertainty
@@ -75,7 +69,7 @@ def diversity_sampling(
     pool_fps = [jnp.mean(x, axis=0) for x, _ in pool_data]
     labeled_fps = [jnp.mean(x, axis=0) for x, _ in labeled_data]
 
-    selected = []
+    selected: List[int] = []
 
     # Greedily select most distant points
     for _ in range(n_select):
@@ -88,7 +82,7 @@ def diversity_sampling(
                     dist = jnp.linalg.norm(pool_fp - labeled_fp)
                     min_dist = min(min_dist, dist)
                 distances.append(min_dist)
-            selected.append(jnp.argmax(jnp.array(distances)))
+            selected.append(int(jnp.argmax(jnp.array(distances))))
         else:
             # Select point furthest from both labeled and selected points
             distances = []
@@ -107,14 +101,13 @@ def diversity_sampling(
                     dist = jnp.linalg.norm(pool_fp - pool_fps[j])
                     min_dist = min(min_dist, dist)
                 distances.append(min_dist)
-            selected.append(jnp.argmax(jnp.array(distances)))
+            selected.append(int(jnp.argmax(jnp.array(distances))))
 
     return selected
 
 
 def combined_acquisition(
-    model: Callable,
-    params: dict,
+    model: Callable[..., Tuple[jnp.ndarray, jnp.ndarray]],
     pool_data: List[Tuple[jnp.ndarray, jnp.ndarray]],
     labeled_data: List[Tuple[jnp.ndarray, jnp.ndarray]],
     n_select: int,
@@ -127,7 +120,6 @@ def combined_acquisition(
 
     Args:
         model: UncertaintyGCN model that supports MC dropout during inference
-        params: Dictionary containing the model parameters
         pool_data: List of tuples containing (features, adjacency) matrices for each
                   molecule in the unlabeled pool
         labeled_data: List of tuples containing (features, adjacency) matrices for each
@@ -143,7 +135,7 @@ def combined_acquisition(
                   pool_data list. The length of the returned list will be n_select.
     """
     # Get uncertainty scores
-    uncertainties = uncertainty_sampling(model, params, pool_data)
+    uncertainties = uncertainty_sampling(model, pool_data)
 
     # Get diversity scores
     diversity_indices = diversity_sampling(pool_data, labeled_data, n_select)
@@ -157,4 +149,5 @@ def combined_acquisition(
     )
 
     # Select top scoring samples
-    return jnp.argsort(combined_scores)[-n_select:]
+    indices = jnp.argsort(combined_scores)[-n_select:]
+    return [int(idx) for idx in indices]

@@ -9,7 +9,7 @@ from molax.models.gcn import UncertaintyGCN, UncertaintyGCNConfig
 class TestUncertaintyGCN:
     """Tests for the UncertaintyGCN implementation."""
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         """Set up test fixtures."""
         # Fixed random seed for reproducibility
         self.key = jax.random.PRNGKey(42)
@@ -47,7 +47,7 @@ class TestUncertaintyGCN:
             self.star_adj[0, i] = self.star_adj[i, 0] = 1.0
         self.star_adj = jnp.array(self.star_adj)
 
-    def test_init(self):
+    def test_init(self) -> None:
         """Test UncertaintyGCN initialization."""
         rngs = nnx.Rngs(
             self.default_key, params=self.params_key, dropout=self.dropout_key
@@ -85,7 +85,7 @@ class TestUncertaintyGCN:
         # Check that the base model has the custom dropout rate
         assert model_custom.base_model.dropout.rate == custom_dropout
 
-    def test_forward_shape(self):
+    def test_forward_shape(self) -> None:
         """Test that forward pass produces correct output shapes."""
         rngs = nnx.Rngs(
             self.default_key, params=self.params_key, dropout=self.dropout_key
@@ -113,7 +113,7 @@ class TestUncertaintyGCN:
         assert mean.shape == (self.out_features,)
         assert variance.shape == (self.out_features,)
 
-    def test_variance_positivity(self):
+    def test_variance_positivity(self) -> None:
         """Test that the predicted variance is always positive."""
         rngs = nnx.Rngs(
             self.default_key, params=self.params_key, dropout=self.dropout_key
@@ -132,7 +132,7 @@ class TestUncertaintyGCN:
             # Variance should always be positive
             assert jnp.all(variance > 0)
 
-    def test_training_mode(self):
+    def test_training_mode(self) -> None:
         """Test that dropout is applied in training mode but not in inference mode."""
         rngs = nnx.Rngs(
             self.default_key, params=self.params_key, dropout=self.dropout_key
@@ -164,7 +164,7 @@ class TestUncertaintyGCN:
         np.testing.assert_allclose(mean_inference, mean_inference2)
         np.testing.assert_allclose(var_inference, var_inference2)
 
-    def test_deterministic_output(self):
+    def test_deterministic_output(self) -> None:
         """Test that the model produces deterministic outputs with same seed."""
         # Same seed should produce same results
         rngs1 = nnx.Rngs(
@@ -213,7 +213,7 @@ class TestUncertaintyGCN:
         assert not jnp.allclose(mean1, mean3)
         assert not jnp.allclose(var1, var3)
 
-    def test_uncertainty_correlation(self):
+    def test_uncertainty_correlation(self) -> None:
         """Test that uncertainty increases for out-of-distribution inputs."""
         rngs = nnx.Rngs(
             self.default_key, params=self.params_key, dropout=self.dropout_key

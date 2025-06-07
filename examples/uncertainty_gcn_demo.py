@@ -6,11 +6,13 @@ This script shows how to:
 2. Initialize and use an UncertaintyGCN model
 3. Interpret uncertainty in predictions
 """
+
 import jax
 import jax.numpy as jnp
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from flax import nnx
+
 from molax.models.gcn import UncertaintyGCN, UncertaintyGCNConfig
 
 # Set random seed for reproducibility
@@ -38,10 +40,10 @@ print("adjacency_matrix.shape", adjacency_matrix.shape)
 
 # 3. Create and initialize the UncertaintyGCN model
 config = UncertaintyGCNConfig(
-    in_features=in_features,            # Number of input features per atom
-    hidden_features=[32, 16, 8],        # GCN layer sizes
-    out_features=1,                     # Single property prediction
-    dropout_rate=0.1,                   # Dropout for regularization
+    in_features=in_features,  # Number of input features per atom
+    hidden_features=[32, 16, 8],  # GCN layer sizes
+    out_features=1,  # Single property prediction
+    dropout_rate=0.1,  # Dropout for regularization
     n_heads=2,
     rngs=rngs,
 )
@@ -54,8 +56,10 @@ mean, variance = model(atom_features, adjacency_matrix)
 
 print(f"Predicted property value: {mean[0]:.4f}")
 print(f"Prediction uncertainty (variance): {variance[0]:.4f}")
-print(f"95% confidence interval: ({mean[0] - 1.96 * jnp.sqrt(variance[0]):.4f}, "
-      f"{mean[0] + 1.96 * jnp.sqrt(variance[0]):.4f})")
+print(
+    f"95% confidence interval: ({mean[0] - 1.96 * jnp.sqrt(variance[0]):.4f}, "
+    f"{mean[0] + 1.96 * jnp.sqrt(variance[0]):.4f})"
+)
 
 # 6. Demonstrate uncertainty behavior with modified inputs
 test_points = 50
@@ -68,7 +72,9 @@ for scale in scaling_factors:
     scaled_features = atom_features * scale
     mean, var = model(scaled_features, adjacency_matrix)
     means.append(mean[0])
-    uncertainties.append(jnp.sqrt(var[0]))  # Use standard deviation for easier interpretation
+    uncertainties.append(
+        jnp.sqrt(var[0])
+    )  # Use standard deviation for easier interpretation
 
 # Convert to arrays
 means = jnp.array(means)
@@ -76,21 +82,21 @@ uncertainties = jnp.array(uncertainties)
 
 # 7. Visualize how uncertainty changes with input distribution shift
 plt.figure(figsize=(10, 6))
-plt.plot(scaling_factors, means, 'b-', label='Prediction')
+plt.plot(scaling_factors, means, "b-", label="Prediction")
 plt.fill_between(
-    scaling_factors, 
+    scaling_factors,
     means - 1.96 * uncertainties,
     means + 1.96 * uncertainties,
-    alpha=0.3, 
-    color='b', 
-    label='95% Confidence Interval'
+    alpha=0.3,
+    color="b",
+    label="95% Confidence Interval",
 )
-plt.xlabel('Input Scaling Factor')
-plt.ylabel('Predicted Property')
-plt.title('Prediction with Uncertainty for Different Input Scales')
+plt.xlabel("Input Scaling Factor")
+plt.ylabel("Predicted Property")
+plt.title("Prediction with Uncertainty for Different Input Scales")
 plt.legend()
 plt.grid(True)
-plt.savefig('examples/uncertainty_demo.png')
+plt.savefig("examples/uncertainty_demo.png")
 plt.close()
 
 print("\nGenerating out-of-distribution examples:")
@@ -98,7 +104,13 @@ for scale in [0.1, 1.0, 10.0]:
     scaled_features = atom_features * scale
     mean, var = model(scaled_features, adjacency_matrix)
     std = jnp.sqrt(var[0])
-    print(f"Scale {scale:.1f}: {mean[0]:.4f} ± {std:.4f}  (95% CI: {mean[0] - 1.96*std:.4f} to {mean[0] + 1.96*std:.4f})")
+    print(
+        f"Scale {scale:.1f}: {mean[0]:.4f} ± {std:.4f}  "
+        f"(95% CI: {mean[0] - 1.96 * std:.4f} to {mean[0] + 1.96 * std:.4f})"
+    )
 
 print("\nDemo completed. Saved visualization to 'uncertainty_demo.png'")
-print("This demonstrates how uncertainty increases as inputs become more out-of-distribution.") 
+print(
+    "This demonstrates how uncertainty increases as inputs become more "
+    "out-of-distribution."
+)

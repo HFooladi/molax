@@ -41,7 +41,7 @@ def smiles_to_graph(smiles: str) -> Tuple[jnp.ndarray, jnp.ndarray]:
         raise ValueError(error_msg)
 
     # Get atom features
-    atoms = mol.GetAtoms()
+    atoms = mol.GetAtoms()  # type: ignore
     n_atoms = len(atoms)
     logger.debug(f"Processing molecule with {n_atoms} atoms")
 
@@ -61,7 +61,7 @@ def smiles_to_graph(smiles: str) -> Tuple[jnp.ndarray, jnp.ndarray]:
 
     # Create adjacency matrix
     adjacency = np.zeros((n_atoms, n_atoms))
-    for bond in mol.GetBonds():
+    for bond in mol.GetBonds():  # type: ignore
         i = bond.GetBeginAtomIdx()
         j = bond.GetEndAtomIdx()
         bond_type = bond.GetBondType()

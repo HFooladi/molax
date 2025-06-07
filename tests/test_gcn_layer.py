@@ -9,7 +9,7 @@ from molax.models.gcn import GCNLayer, GCNLayerConfig
 class TestGCNLayer:
     """Tests for the GCNLayer implementation."""
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         """Set up test fixtures."""
         # Fixed random seed for reproducibility
         self.key = jax.random.PRNGKey(42)
@@ -44,7 +44,7 @@ class TestGCNLayer:
             self.isolated_adj[i, i + 1] = self.isolated_adj[i + 1, i] = 1.0
         self.isolated_adj = jnp.array(self.isolated_adj)
 
-    def test_init(self):
+    def test_init(self) -> None:
         """Test GCNLayer initialization."""
         config = GCNLayerConfig(
             in_features=self.in_features, out_features=self.out_features, rngs=self.rngs
@@ -57,7 +57,7 @@ class TestGCNLayer:
         assert layer.dense.in_features == self.in_features
         assert layer.dense.out_features == self.out_features
 
-    def test_forward_shape(self):
+    def test_forward_shape(self) -> None:
         """Test that forward pass produces correct output shapes."""
         config = GCNLayerConfig(
             in_features=self.in_features, out_features=self.out_features, rngs=self.rngs
@@ -76,7 +76,7 @@ class TestGCNLayer:
         output = layer(self.node_features, self.isolated_adj)
         assert output.shape == (self.num_nodes, self.out_features)
 
-    def test_isolated_nodes(self):
+    def test_isolated_nodes(self) -> None:
         """Test that isolated nodes are handled properly."""
         config = GCNLayerConfig(
             in_features=self.in_features, out_features=self.out_features, rngs=self.rngs
@@ -96,7 +96,7 @@ class TestGCNLayer:
         # For isolated node, output should be its own transformed features
         np.testing.assert_allclose(output[0], dense_output[0], rtol=1e-5)
 
-    def test_normalization(self):
+    def test_normalization(self) -> None:
         """Test the normalization of adjacency matrix (D^-1/2 A D^-1/2)."""
         # Test with fully connected graph (all nodes have same degree)
         adj = self.full_adj
@@ -117,7 +117,7 @@ class TestGCNLayer:
                     adj_normalized[i, j], expected_value, decimal=5
                 )
 
-    def test_bias_options(self):
+    def test_bias_options(self) -> None:
         """Test layer with and without bias."""
         # With bias
         config_with_bias = GCNLayerConfig(
@@ -146,7 +146,7 @@ class TestGCNLayer:
         # Assert they're not the same (should differ due to bias terms)
         assert not jnp.allclose(output_with_bias, output_no_bias)
 
-    def test_deterministic_output(self):
+    def test_deterministic_output(self) -> None:
         """Test that the layer produces deterministic outputs with same seed."""
         config1 = GCNLayerConfig(
             in_features=self.in_features,

@@ -1,3 +1,3 @@
-from .gcn import GCN, UncertaintyGCN
+from .gcn import MolecularGCN, UncertaintyGCN
 
-__all__ = ["GCN", "UncertaintyGCN"]
+__all__ = ["MolecularGCN", "UncertaintyGCN"]
