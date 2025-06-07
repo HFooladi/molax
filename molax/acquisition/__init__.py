@@ -1,7 +1,3 @@
-from .uncertainty import uncertainty_sampling, diversity_sampling, combined_acquisition
+from .uncertainty import combined_acquisition, diversity_sampling, uncertainty_sampling
 
-__all__ = [
-    "uncertainty_sampling",
-    "diversity_sampling",
-    "combined_acquisition"
-]
+__all__ = ["uncertainty_sampling", "diversity_sampling", "combined_acquisition"]
