@@ -102,9 +102,8 @@ Repository = "https://github.com/hfooladi/molax"
 Documentation = "https://github.com/hfooladi/molax#readme"
 "Bug Tracker" = "https://github.com/hfooladi/molax/issues"
 
-[tool.uv]
-# uv configuration for faster dependency resolution and installation
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0.0",
     "black>=23.0",
@@ -112,7 +111,3 @@ dev-dependencies = [
     "mypy>=1.0",
     "pre-commit>=3.0.0",
 ]
-
-[tool.uv.pip]
-# Prefer binary distributions for faster installation
-prefer-binary = true
