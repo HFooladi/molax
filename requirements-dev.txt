@@ -1,0 +1,14 @@
+# Include base requirements
+-r requirements.txt
+
+# Development tools
+pytest>=7.0
+pytest-cov>=4.0.0
+black>=23.0
+ruff>=0.0.291
+mypy>=1.0
+pre-commit>=3.0.0
+
+# Documentation (if needed)
+# mkdocs>=1.4.0
+# mkdocs-material>=9.0.0
