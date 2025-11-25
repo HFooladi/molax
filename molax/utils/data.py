@@ -92,7 +92,7 @@ class MolecularDataset:
         self,
         df: Union[pd.DataFrame, str],
         smiles_col: str = "smiles",
-        label_col: str = "label",
+        label_col: str = "property",
     ):
         """Initialize a MolecularDataset instance.
 
@@ -100,14 +100,14 @@ class MolecularDataset:
             df: Either a pandas DataFrame or a path to a CSV file containing the data
             smiles_col: Name of the column containing SMILES strings. Defaults to
                         'smiles'
-            label_col: Name of the column containing labels. Defaults to 'label'
+            label_col: Name of the column containing labels. Defaults to 'property'
 
         Raises:
             ValueError: If the specified column names are not found in the DataFrame
         """
         logger.info(
             f"Initializing MolecularDataset with columns: {smiles_col} (SMILES), "
-            f"{label_col} (labels)"
+            f"{label_col} (property)"
         )
 
         if isinstance(df, str) or isinstance(df, Path):
@@ -126,7 +126,7 @@ class MolecularDataset:
             logger.error(error_msg)
             raise ValueError(error_msg)
         if label_col not in self.df.columns:
-            error_msg = f"Label column '{label_col}' not found in DataFrame"
+            error_msg = f"Property column '{label_col}' not found in DataFrame"
             logger.error(error_msg)
             raise ValueError(error_msg)
 
@@ -146,7 +146,7 @@ class MolecularDataset:
             logger.warning(f"Skipped {invalid_smiles} invalid SMILES strings")
 
         self.labels = jnp.array(self.df[label_col])
-        logger.info(f"Dataset initialized with {len(self)} valid molecules")
+        logger.info(f"Initialized {len(self)} molecules with property: {label_col}")
 
     def __len__(self) -> int:
         """Get the number of molecules in the dataset.
@@ -167,7 +167,7 @@ class MolecularDataset:
         Returns:
             Tuple containing:
                 - graph: Tuple of (node_features, adjacency_matrix)
-                - label: jnp.ndarray containing the molecule's label
+                - property: jnp.ndarray containing the molecule's property
         """
         logger.debug(f"Retrieving molecule at index {index}")
         return self.graphs[index], self.labels[index]
@@ -187,7 +187,7 @@ class MolecularDataset:
         Returns:
             Tuple containing:
                 - batch_graphs: List of (node_features, adjacency_matrix) tuples
-                - batch_labels: jnp.ndarray containing the labels for the batch
+                - batch_property: jnp.ndarray containing the property for the batch
         """
         logger.debug(f"Retrieving batch of {len(indices)} molecules")
         batch_graphs = [self.graphs[i] for i in indices]

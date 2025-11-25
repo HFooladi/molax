@@ -41,7 +41,7 @@ from molax.models import UncertaintyGCN
 from molax.acquisition import combined_acquisition
 
 # Load your data
-dataset = MolecularDataset('data/molecules.csv', 
+dataset = MolecularDataset('datasets/molecules.csv', 
                           smiles_col='smiles', 
                           label_col='property')
 
