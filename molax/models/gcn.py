@@ -112,7 +112,7 @@ class MolecularGCN(nnx.Module):
         # first layer has in_features = config.in_features
         # all other layers have in_features = out_features of previous layer
 
-        self.gcn_layers = []
+        self.gcn_layers = nnx.List()
         in_features = self.config.in_features
         for out_features in self.config.hidden_features:
             self.gcn_layers.append(
