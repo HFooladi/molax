@@ -28,8 +28,8 @@ config = UncertaintyGCNConfig(
 # Initialize model
 model = UncertaintyGCN(config)
 
-# Initialize optimizer
-optimizer = nnx.Optimizer(model, optax.adam(1e-3))
+# Initialize optimizer with reference sharing (ModelAndOptimizer for simpler API)
+model_and_opt = nnx.ModelAndOptimizer(model, optax.adam(1e-3))  # reference sharing
 
 # Initialize random labeled pool
 n_initial = 100
@@ -64,11 +64,11 @@ for iteration in range(n_iterations):
         batch_graphs = [labeled_data[i] for i in batch_indices]
         batch_labels = labeled_labels[batch_indices]
 
-        # Forward pass
-        def loss_fn() -> jnp.ndarray:
+        # Forward pass and update
+        def loss_fn(model: UncertaintyGCN) -> jnp.ndarray:
             total_loss = 0.0
             for i, (features, adj) in enumerate(batch_graphs):
-                mean, variance = model(features, adj)
+                mean, variance = model(features, adj, training=True)
                 # Negative log likelihood loss for Gaussian
                 nll = 0.5 * jnp.sum(
                     jnp.log(variance) + ((batch_labels[i] - mean) ** 2) / variance
@@ -76,10 +76,10 @@ for iteration in range(n_iterations):
                 total_loss += nll
             return total_loss / len(batch_graphs)
 
-        # Update
+        # Compute gradients and update
         key, subkey = jax.random.split(key)
-        loss, grads = jax.value_and_grad(loss_fn)()
-        optimizer.update(grads)
+        loss, grads = nnx.value_and_grad(loss_fn)(model_and_opt.model)
+        model_and_opt.update(grads)  # inplace updates
 
         if (epoch + 1) % 10 == 0:
             print(f"Epoch {epoch + 1}, Loss: {loss:.4f}")
@@ -91,7 +91,7 @@ for iteration in range(n_iterations):
     acquisition_scores = []
     for features, adj in pool_data:
         key, subkey = jax.random.split(key)
-        mean, variance = model(features, adj)
+        mean, variance = model_and_opt.model(features, adj)
         # Simple uncertainty sampling - choose highest variance
         acquisition_scores.append(variance[0])
 
@@ -114,7 +114,7 @@ for iteration in range(n_iterations):
 
         batch_loss = 0
         for j, (features, adj) in enumerate(batch):
-            mean, _ = model(features, adj)
+            mean, _ = model_and_opt.model(features, adj)
             batch_loss += jnp.mean((mean - batch_labels[j]) ** 2)
 
         test_loss += batch_loss

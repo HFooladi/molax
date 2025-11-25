@@ -36,27 +36,31 @@ numpy
 Basic usage with SMILES data:
 
 ```python
+import flax.nnx as nnx
+import optax
 from molax.utils.data import MolecularDataset
-from molax.models import UncertaintyGCN
-from molax.acquisition import combined_acquisition
+from molax.models.gcn import UncertaintyGCN, UncertaintyGCNConfig
 
 # Load your data
-dataset = MolecularDataset('datasets/molecules.csv', 
-                          smiles_col='smiles', 
-                          label_col='property')
+dataset = MolecularDataset('datasets/molecules.csv')
 
 # Split dataset
 train_data, test_data = dataset.split_train_test(test_size=0.2)
 
 # Initialize model
-model = UncertaintyGCN(
-    hidden_features=(64, 64),
-    output_features=1,
-    dropout_rate=0.1
+config = UncertaintyGCNConfig(
+    in_features=train_data.graphs[0][0].shape[1],
+    hidden_features=[64, 64],
+    out_features=1,
+    dropout_rate=0.1,
 )
+model = UncertaintyGCN(config)
+
+# Initialize optimizer
+model_and_opt = nnx.ModelAndOptimizer(model, optax.adam(1e-3))
 
 # Run active learning loop
-# See examples/active_learning.py for complete implementation
+# See examples/simple_active_learning.py for complete implementation
 ```
 
 ## Features
@@ -69,7 +73,9 @@ model = UncertaintyGCN(
 
 ## Examples
 
-Check `examples/active_learning.py` for a complete active learning pipeline.
+Check `examples/simple_active_learning.py` for a complete active learning pipeline with uncertainty-based acquisition.
+
+For uncertainty quantification demonstration, see `examples/uncertainty_gcn_demo.py`.
 
 ## Contributing
 
