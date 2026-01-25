@@ -1,7 +1,11 @@
 # molax
 
+[![CI](https://github.com/hfooladi/molax/actions/workflows/ci.yml/badge.svg)](https://github.com/hfooladi/molax/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python Version](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/downloads/)
+[![JAX](https://img.shields.io/badge/JAX-%E2%89%A50.4.20-9cf.svg)](https://github.com/google/jax)
+[![Flax](https://img.shields.io/badge/Flax-%E2%89%A50.12.0-orange.svg)](https://github.com/google/flax)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
 Molecular active learning with JAX - a high-performance framework for active learning in molecular property prediction.
 
