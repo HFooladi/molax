@@ -29,7 +29,9 @@ A prioritized roadmap of killer features for molax, focusing on advancing uncert
 
 Better uncertainty quantification is the core differentiator for active learning. These features directly improve the quality and reliability of uncertainty estimates.
 
-### 1.1 Deep Ensembles
+### 1.1 Deep Ensembles ✅
+
+**Status:** Implemented in `molax/models/ensemble.py`
 
 **What:** Train N independent GCN models with different random initializations; use prediction disagreement as uncertainty.
 
@@ -71,10 +73,10 @@ class DeepEnsemble(nnx.Module):
 ```
 
 **Acceptance Criteria:**
-- [ ] `DeepEnsemble` class with configurable number of members
-- [ ] Separate epistemic and aleatoric uncertainty outputs
-- [ ] Parallel training support for ensemble members
-- [ ] Tests comparing ensemble vs MC Dropout uncertainty quality
+- [x] `DeepEnsemble` class with configurable number of members
+- [x] Separate epistemic and aleatoric uncertainty outputs
+- [x] Parallel training support for ensemble members
+- [x] Tests comparing ensemble vs MC Dropout uncertainty quality
 
 ---
 
