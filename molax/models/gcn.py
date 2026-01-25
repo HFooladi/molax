@@ -1,301 +1,322 @@
+"""Graph Convolutional Networks using jraph for efficient batched processing."""
+
 from dataclasses import dataclass
-from typing import Callable, Sequence, Tuple
+from typing import Sequence, Tuple
 
 import flax.nnx as nnx
-import jax
 import jax.numpy as jnp
+import jraph
 
 
 @dataclass
-class GCNLayerConfig:
-    """Configuration for Graph Convolutional Network Layer.
+class GCNConfig:
+    """Configuration for Graph Convolutional Network.
 
     Attributes:
-        features: Number of output features for the layer
-        use_bias: Whether to include bias in the linear transformation
+        node_features: Input node feature dimension
+        hidden_features: List of hidden layer dimensions
+        out_features: Output dimension
+        dropout_rate: Dropout rate for regularization
     """
 
-    in_features: int
-    out_features: int
-    use_bias: bool = True
-    rngs: nnx.Rngs = nnx.Rngs(0)
-
-
-class GCNLayer(nnx.Module):
-    """Graph Convolutional Layer implementation following Kipf & Welling (ICLR 2017).
-
-    This layer implements the propagation rule:
-    H^(l+1) = σ(D^(-1/2) Ã D^(-1/2) H^(l) W^(l))
-    where:
-    - Ã is adjacency matrix with self-connections
-    - D is the degree matrix of Ã
-    - H^(l) is the node feature matrix at layer l
-    - W^(l) is the weight matrix at layer l
-    - σ is a non-linear activation function
-    """
-
-    def __init__(self, config: GCNLayerConfig):
-        """Initialize GCN layer with the given configuration.
-
-        Args:
-            config: Configuration specifying output features and bias usage
-        """
-        super().__init__()
-        self.config = config
-        self.dense = nnx.Linear(
-            in_features=self.config.in_features,
-            out_features=self.config.out_features,
-            use_bias=self.config.use_bias,
-            rngs=self.config.rngs,
-        )
-
-    def __call__(self, x: jnp.ndarray, adj: jnp.ndarray) -> jnp.ndarray:
-        """Apply graph convolution operation.
-
-        Args:
-            x: Node feature matrix of shape [num_nodes, in_features]
-            adj: Adjacency matrix of shape [num_nodes, num_nodes]
-
-        Returns:
-            Updated node features of shape [num_nodes, out_features]
-        """
-        # Add self-connections to adjacency matrix (A + I)
-        adj_hat = adj + jnp.eye(adj.shape[0])
-
-        # Normalize adjacency matrix (D^(-1/2) * A * D^(-1/2))
-        deg = jnp.sum(adj_hat, axis=1)
-        deg_inv_sqrt = jnp.power(deg, -0.5)
-        # Handle isolated nodes (degree = 0)
-        deg_inv_sqrt = jnp.where(jnp.isinf(deg_inv_sqrt), 0.0, deg_inv_sqrt)
-        adj_normalized = deg_inv_sqrt[:, None] * adj_hat * deg_inv_sqrt[None, :]
-
-        # Linear transformation and graph convolution
-        x = self.dense(x)  # XW
-        return jnp.matmul(adj_normalized, x)  # D^(-1/2) * A * D^(-1/2) * XW
-
-
-@dataclass
-class MolecularGCNConfig:
-    """Configuration for Molecular Graph Convolutional Network.
-
-    Attributes:
-        in_features: Dimension of the input features
-        hidden_features: Sequence of feature dimensions for each GCN layer
-        out_features: Dimension of the final output
-        dropout_rate: Rate for dropout regularization
-    """
-
-    in_features: int
+    node_features: int
     hidden_features: Sequence[int]
     out_features: int
     dropout_rate: float = 0.1
-    rngs: nnx.Rngs = nnx.Rngs(0, params=1, dropout=2)
+
+
+class GraphConvolution(nnx.Module):
+    """Single graph convolution layer using message passing.
+
+    Implements: h_i' = σ(W * aggregate(h_j for j in neighbors(i) ∪ {i}))
+    """
+
+    def __init__(self, in_features: int, out_features: int, rngs: nnx.Rngs):
+        self.linear = nnx.Linear(in_features, out_features, rngs=rngs)
+
+    def __call__(self, graph: jraph.GraphsTuple) -> jraph.GraphsTuple:
+        """Apply graph convolution.
+
+        Args:
+            graph: Input graph with node features
+
+        Returns:
+            Graph with updated node features
+        """
+        nodes = graph.nodes
+
+        # Message passing: aggregate neighbor features
+        # For each edge (sender -> receiver), send the sender's features
+        messages = nodes[graph.senders]
+
+        # Aggregate messages at each receiver node (sum aggregation)
+        aggregated = jraph.segment_sum(
+            messages,
+            graph.receivers,
+            num_segments=nodes.shape[0],
+        )
+
+        # Compute degree for normalization (number of incoming edges per node)
+        ones = jnp.ones((graph.senders.shape[0],))
+        degree = jraph.segment_sum(ones, graph.receivers, num_segments=nodes.shape[0])
+        degree = jnp.maximum(degree, 1.0)  # Avoid division by zero
+
+        # Normalize by degree
+        aggregated = aggregated / degree[:, None]
+
+        # Linear transformation
+        new_nodes = self.linear(aggregated)
+
+        return graph._replace(nodes=new_nodes)
 
 
 class MolecularGCN(nnx.Module):
-    """Molecular Graph Convolutional Network for molecular property prediction.
+    """Graph Convolutional Network for molecular property prediction.
 
-    This model consists of multiple GCN layers followed by mean pooling and
-    a final prediction layer. It's designed for graph-level tasks on molecular graphs.
+    Uses jraph for efficient batched processing of variable-sized graphs.
     """
 
-    def __init__(self, config: MolecularGCNConfig):
-        """Initialize molecular GCN with the given configuration.
-
-        Args:
-            config: Configuration specifying architecture parameters
-        """
-        super().__init__()
+    def __init__(self, config: GCNConfig, rngs: nnx.Rngs):
         self.config = config
+        self.rngs = rngs
 
-        # Initialize GCN layers
-        # first layer has in_features = config.in_features
-        # all other layers have in_features = out_features of previous layer
+        # Build GCN layers
+        layers = []
+        in_dim = config.node_features
+        for hidden_dim in config.hidden_features:
+            layers.append(GraphConvolution(in_dim, hidden_dim, rngs))
+            in_dim = hidden_dim
 
-        self.gcn_layers = nnx.List()
-        in_features = self.config.in_features
-        for out_features in self.config.hidden_features:
-            self.gcn_layers.append(
-                GCNLayer(
-                    GCNLayerConfig(
-                        in_features=in_features,
-                        out_features=out_features,
-                        rngs=self.config.rngs,
-                    )
-                )
-            )
-            in_features = out_features
+        # Store as nnx.List for proper parameter tracking
+        self.conv_layers = nnx.List(layers)
 
-        # Final prediction layer
-        self.output = nnx.Linear(
-            in_features=self.config.hidden_features[-1],
-            out_features=self.config.out_features,
-            rngs=self.config.rngs,
-        )
+        # Output projection
+        self.output_linear = nnx.Linear(in_dim, config.out_features, rngs=rngs)
 
-        # Dropout layer for regularization
-        self.dropout = nnx.Dropout(rate=self.config.dropout_rate, rngs=self.config.rngs)
+        # Dropout
+        self.dropout = nnx.Dropout(config.dropout_rate, rngs=rngs)
 
-    def __call__(
-        self, x: jnp.ndarray, adj: jnp.ndarray, *, training: bool = False
-    ) -> jnp.ndarray:
-        """Forward pass through the molecular GCN.
+    def __call__(self, graph: jraph.GraphsTuple, training: bool = False) -> jnp.ndarray:
+        """Forward pass through the GCN.
 
         Args:
-            x: Node feature matrix of shape [num_nodes, in_features]
-            adj: Adjacency matrix of shape [num_nodes, num_nodes]
+            graph: Batched (and possibly padded) jraph.GraphsTuple
             training: Whether in training mode (enables dropout)
 
         Returns:
-            Predicted molecular property of shape [output_features]
+            Graph-level predictions of shape [n_graphs, out_features]
         """
-        # Process features through GCN layers
-        for gcn_layer in self.gcn_layers:
-            x = gcn_layer(x, adj)
-            x = nnx.relu(x)  # Non-linear activation
+        # Apply GCN layers
+        for conv in self.conv_layers:
+            graph = conv(graph)
+            graph = graph._replace(nodes=nnx.relu(graph.nodes))
             if training:
-                x = self.dropout(x, deterministic=not training)
+                graph = graph._replace(nodes=self.dropout(graph.nodes))
 
-        # Global pooling: compute mean of node features to get graph representation
-        x = jnp.mean(x, axis=0)
+        # Global mean pooling per graph using jraph utilities
+        n_graphs = graph.n_node.shape[0]
 
-        # Final prediction
-        return self.output(x)
+        # Create graph indices for each node
+        graph_indices = jnp.repeat(
+            jnp.arange(n_graphs),
+            graph.n_node,
+            total_repeat_length=graph.nodes.shape[0],
+        )
 
+        # Sum pooling (more stable than mean for padded graphs)
+        pooled_sum = jraph.segment_sum(
+            graph.nodes,
+            graph_indices,
+            num_segments=n_graphs,
+        )
 
-@dataclass
-class UncertaintyGCNConfig:
-    """Configuration for Uncertainty-aware Graph Convolutional Network.
+        # Normalize by number of nodes per graph (avoiding division by zero)
+        n_nodes_per_graph = graph.n_node.astype(jnp.float32)
+        n_nodes_per_graph = jnp.maximum(n_nodes_per_graph, 1.0)[:, None]
+        pooled = pooled_sum / n_nodes_per_graph
 
-    Attributes:
-        in_features: Dimension of the input features
-        hidden_features: Sequence of feature dimensions for each GCN layer
-        output_features: Dimension of the final output
-        dropout_rate: Rate for dropout regularization
-        n_heads: Number of output heads for uncertainty (typically 2 for mean/variance)
-    """
-
-    in_features: int
-    hidden_features: Sequence[int]
-    out_features: int
-    dropout_rate: float = 0.1
-    n_heads: int = 2  # Number of output heads for uncertainty
-    rngs: nnx.Rngs = nnx.Rngs(0, params=1, dropout=2)
+        # Output projection
+        return self.output_linear(pooled)
 
 
 class UncertaintyGCN(nnx.Module):
-    """Uncertainty-aware Graph Convolutional Network for probabilistic predictions.
+    """GCN with uncertainty estimation via mean and variance heads.
 
-    This model extends MolecularGCN by adding separate prediction heads for
-    mean and variance, enabling uncertainty quantification in predictions.
-    It implements a Bayesian-by-design approach where aleatoric uncertainty
-    is modeled explicitly.
+    Outputs both mean prediction and predicted variance for uncertainty quantification.
     """
 
-    def __init__(self, config: UncertaintyGCNConfig):
-        """Initialize uncertainty-aware GCN with the given configuration.
-
-        Args:
-            config: Configuration specifying architecture parameters
-        """
-        super().__init__()
+    def __init__(self, config: GCNConfig, rngs: nnx.Rngs):
         self.config = config
+        self.rngs = rngs
 
-        # Base GCN model for feature extraction
-        self.base_model = MolecularGCN(
-            MolecularGCNConfig(
-                in_features=self.config.in_features,
-                hidden_features=self.config.hidden_features,
-                out_features=self.config.out_features,
-                dropout_rate=self.config.dropout_rate,
-                rngs=self.config.rngs,
-            )
-        )
+        # Build GCN layers
+        layers = []
+        in_dim = config.node_features
+        for hidden_dim in config.hidden_features:
+            layers.append(GraphConvolution(in_dim, hidden_dim, rngs))
+            in_dim = hidden_dim
 
-        # Separate prediction heads for mean and uncertainty
-        self.mean_head = nnx.Linear(
-            in_features=self.config.out_features,
-            out_features=self.config.out_features,
-            rngs=self.config.rngs,
-        )
-        self.var_head = nnx.Linear(
-            in_features=self.config.out_features,
-            out_features=self.config.out_features,
-            rngs=self.config.rngs,
-        )
+        self.conv_layers = nnx.List(layers)
+
+        # Separate heads for mean and variance
+        self.mean_head = nnx.Linear(in_dim, config.out_features, rngs=rngs)
+        self.var_head = nnx.Linear(in_dim, config.out_features, rngs=rngs)
+
+        # Dropout
+        self.dropout = nnx.Dropout(config.dropout_rate, rngs=rngs)
 
     def __call__(
-        self, x: jnp.ndarray, adj: jnp.ndarray, *, training: bool = False
+        self, graph: jraph.GraphsTuple, training: bool = False
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        """Forward pass through the uncertainty-aware GCN.
+        """Forward pass returning mean and variance.
 
         Args:
-            x: Node feature matrix of shape [num_nodes, in_features]
-            adj: Adjacency matrix of shape [num_nodes, num_nodes]
-            training: Whether in training mode (enables dropout)
+            graph: Batched (and possibly padded) jraph.GraphsTuple
+            training: Whether in training mode
 
         Returns:
-            Tuple of (mean, variance) for the predicted property
+            Tuple of (mean, variance) each of shape [n_graphs, out_features]
         """
-        # Get shared representations from base model
-        shared_features = self.base_model(x, adj, training=training)
+        # Apply GCN layers
+        for conv in self.conv_layers:
+            graph = conv(graph)
+            graph = graph._replace(nodes=nnx.relu(graph.nodes))
+            if training:
+                graph = graph._replace(nodes=self.dropout(graph.nodes))
 
-        # Predict mean and log variance from shared features
-        mean = self.mean_head(shared_features)
-        log_var = self.var_head(
-            shared_features
-        )  # Predict log(variance) for numerical stability
+        # Global mean pooling per graph
+        n_graphs = graph.n_node.shape[0]
+        graph_indices = jnp.repeat(
+            jnp.arange(n_graphs),
+            graph.n_node,
+            total_repeat_length=graph.nodes.shape[0],
+        )
 
-        # Return mean and variance (exp of log_var)
+        # Sum pooling
+        pooled_sum = jraph.segment_sum(
+            graph.nodes,
+            graph_indices,
+            num_segments=n_graphs,
+        )
+
+        # Normalize by number of nodes (avoiding division by zero)
+        n_nodes_per_graph = graph.n_node.astype(jnp.float32)
+        n_nodes_per_graph = jnp.maximum(n_nodes_per_graph, 1.0)[:, None]
+        pooled = pooled_sum / n_nodes_per_graph
+
+        # Predict mean and log-variance
+        mean = self.mean_head(pooled)
+        log_var = self.var_head(pooled)
+
+        # Return mean and variance (exp for positivity)
         return mean, jnp.exp(log_var)
 
 
-def create_train_step(
+def create_train_state(
     model: UncertaintyGCN, learning_rate: float = 1e-3
-) -> Callable[..., Tuple[float, UncertaintyGCN]]:
-    """Create a jitted training step function for the uncertainty-aware GCN.
-
-    This function implements training with a negative log-likelihood loss
-    that accounts for predictive uncertainty.
+) -> nnx.Optimizer:
+    """Create optimizer for training.
 
     Args:
-        model: The uncertainty-aware GCN model
-        learning_rate: Learning rate for parameter updates
+        model: The model to optimize
+        learning_rate: Learning rate
 
     Returns:
-        Jitted function for performing a single training step
+        nnx.Optimizer instance
+    """
+    import optax
+
+    return nnx.Optimizer(model, optax.adam(learning_rate), wrt=nnx.Param)
+
+
+@nnx.jit
+def train_step(
+    model: UncertaintyGCN,
+    optimizer: nnx.Optimizer,
+    graph: jraph.GraphsTuple,
+    labels: jnp.ndarray,
+    mask: jnp.ndarray,
+) -> jnp.ndarray:
+    """JIT-compiled training step.
+
+    Args:
+        model: The model
+        optimizer: The optimizer
+        graph: Batched (padded) input graphs
+        labels: Target labels of shape [n_graphs] (padded with zeros)
+        mask: Boolean mask indicating real graphs (not padding)
+
+    Returns:
+        Loss value
     """
 
-    @jax.jit
-    def train_step(
-        model: UncertaintyGCN,
-        batch: Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray],
-        key: jnp.ndarray,
-    ) -> Tuple[float, UncertaintyGCN]:
-        """Perform a single training step.
+    def loss_fn(model: UncertaintyGCN) -> jnp.ndarray:
+        mean, var = model(graph, training=True)
+        mean = mean.squeeze(-1)
+        var = var.squeeze(-1)
 
-        Args:
-            model: Model parameters
-            batch: Tuple of (node_features, adjacency_matrix, target)
-            key: JAX PRNG key for randomness
+        # Compute NLL only for real graphs (masked)
+        nll = 0.5 * (jnp.log(var + 1e-6) + (labels - mean) ** 2 / (var + 1e-6))
+        # Apply mask and compute mean over real graphs only
+        masked_nll = jnp.where(mask, nll, 0.0)
+        return jnp.sum(masked_nll) / jnp.sum(mask)
 
-        Returns:
-            Tuple of (loss, updated_variables)
-        """
+    loss, grads = nnx.value_and_grad(loss_fn)(model)
+    optimizer.update(model, grads)
+    return loss
 
-        def loss_fn(model: UncertaintyGCN) -> jnp.ndarray:
-            x, adj, y = batch
-            mean, var = model(x, adj, training=True)
-            # Negative log-likelihood for a Gaussian: 0.5 * (log(var) + (y-mean)²/var)
-            nll = 0.5 * jnp.sum(jnp.log(var) + (y - mean) ** 2 / var)
-            return nll
 
-        # Compute loss and gradients
-        loss, grads = jax.value_and_grad(loss_fn)(model)
+@nnx.jit
+def eval_step(
+    model: UncertaintyGCN,
+    graph: jraph.GraphsTuple,
+    labels: jnp.ndarray,
+    mask: jnp.ndarray,
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """JIT-compiled evaluation step.
 
-        # Update parameters with simple SGD
-        # Note: In practice, you might want to use optimizers from optax
-        model = jax.tree_map(lambda p, g: p - learning_rate * g, model, grads)
-        return loss, model
+    Args:
+        model: The model
+        graph: Batched (padded) input graphs
+        labels: Target labels (padded)
+        mask: Boolean mask for real graphs
 
-    return train_step  # type: ignore
+    Returns:
+        Tuple of (mse, mean_predictions)
+    """
+    mean, _ = model(graph, training=False)
+    mean = mean.squeeze(-1)
+
+    # Compute MSE only for real graphs
+    se = (mean - labels) ** 2
+    masked_se = jnp.where(mask, se, 0.0)
+    mse = jnp.sum(masked_se) / jnp.sum(mask)
+    return mse, mean
+
+
+@nnx.jit
+def predict_with_uncertainty(
+    model: UncertaintyGCN,
+    graph: jraph.GraphsTuple,
+    n_samples: int = 10,
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """Get predictions with MC dropout uncertainty.
+
+    Args:
+        model: The model
+        graph: Batched input graphs
+        n_samples: Number of MC samples
+
+    Returns:
+        Tuple of (mean_prediction, epistemic_uncertainty)
+    """
+    predictions = []
+    for _ in range(n_samples):
+        mean, _ = model(graph, training=True)  # Enable dropout
+        predictions.append(mean)
+
+    predictions = jnp.stack(predictions, axis=0)
+    mean_pred = jnp.mean(predictions, axis=0)
+    uncertainty = jnp.var(predictions, axis=0)
+
+    return mean_pred, uncertainty

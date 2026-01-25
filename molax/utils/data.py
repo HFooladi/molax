@@ -1,7 +1,10 @@
+"""Data utilities for molecular graph datasets using jraph for efficient batching."""
+
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
 import jax.numpy as jnp
+import jraph
 import numpy as np
 import pandas as pd
 from rdkit import Chem
@@ -9,282 +12,281 @@ from rdkit import Chem
 from .logger import logger
 
 
-def smiles_to_graph(smiles: str) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    """Convert SMILES string to molecular graph representation.
-
-    This function converts a SMILES string into a molecular graph representation
-    suitable for graph neural networks. The graph is represented as node features and an
-    adjacency
-    matrix. Node features include atomic properties while the adjacency matrix encodes
-    the molecular structure.
+def smiles_to_jraph(smiles: str) -> jraph.GraphsTuple:
+    """Convert SMILES string to jraph GraphsTuple format.
 
     Args:
-        smiles: SMILES string representing the molecule to convert
+        smiles: SMILES string representing the molecule
 
     Returns:
-        Tuple containing:
-            - node_features: jnp.ndarray of shape (n_atoms, 6) containing atom features
-              where each atom is represented by [atomic_num, degree, formal_charge,
-              chiral_tag, hybridization, aromacity]
-            - adjacency_matrix: jnp.ndarray of shape (n_atoms, n_atoms) where values
-              represent bond types (0 for no bond, 1 for single bond, 2 for double bond,
-              etc.)
+        jraph.GraphsTuple containing the molecular graph
 
     Raises:
-        ValueError: If the SMILES string is invalid and cannot be parsed
+        ValueError: If the SMILES string is invalid
     """
-    logger.debug(f"Converting SMILES to graph: {smiles}")
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
-        error_msg = f"Invalid SMILES string: {smiles}"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
+        raise ValueError(f"Invalid SMILES string: {smiles}")
 
-    # Get atom features
-    atoms = mol.GetAtoms()  # type: ignore
+    atoms = mol.GetAtoms()
     n_atoms = len(atoms)
-    logger.debug(f"Processing molecule with {n_atoms} atoms")
 
-    # Atom features: [atomic_num, degree, formal_charge, chiral_tag, hybridization,
-    #                aromacity]
+    # Node features: [atomic_num, degree, formal_charge, chiral_tag,
+    #                 hybridization, aromacity]
     node_features = []
     for atom in atoms:
         features = [
-            atom.GetAtomicNum(),
-            atom.GetDegree(),
-            atom.GetFormalCharge(),
-            atom.GetChiralTag(),
-            atom.GetHybridization(),
-            atom.GetIsAromatic(),
+            float(atom.GetAtomicNum()),
+            float(atom.GetDegree()),
+            float(atom.GetFormalCharge()),
+            float(atom.GetChiralTag()),
+            float(atom.GetHybridization()),
+            float(atom.GetIsAromatic()),
         ]
         node_features.append(features)
 
-    # Create adjacency matrix
-    adjacency = np.zeros((n_atoms, n_atoms))
-    for bond in mol.GetBonds():  # type: ignore
+    # Edge features: build sender/receiver lists from bonds
+    senders = []
+    receivers = []
+    edge_features = []
+
+    for bond in mol.GetBonds():
         i = bond.GetBeginAtomIdx()
         j = bond.GetEndAtomIdx()
-        bond_type = bond.GetBondType()
-        adjacency[i, j] = float(bond_type)
-        adjacency[j, i] = float(bond_type)
+        bond_type = float(bond.GetBondType())
 
-    logger.debug(f"Successfully converted SMILES to graph with {n_atoms} atoms")
-    return jnp.array(node_features), jnp.array(adjacency)
+        # Add both directions for undirected graph
+        senders.extend([i, j])
+        receivers.extend([j, i])
+        edge_features.extend([[bond_type], [bond_type]])
+
+    # Add self-loops for GCN message passing
+    for i in range(n_atoms):
+        senders.append(i)
+        receivers.append(i)
+        edge_features.append([1.0])  # Self-loop edge feature
+
+    n_edges = len(senders)
+
+    return jraph.GraphsTuple(
+        nodes=jnp.array(node_features, dtype=jnp.float32),
+        edges=jnp.array(edge_features, dtype=jnp.float32)
+        if edge_features
+        else jnp.zeros((0, 1), dtype=jnp.float32),
+        senders=jnp.array(senders, dtype=jnp.int32),
+        receivers=jnp.array(receivers, dtype=jnp.int32),
+        n_node=jnp.array([n_atoms], dtype=jnp.int32),
+        n_edge=jnp.array([n_edges], dtype=jnp.int32),
+        globals=None,
+    )
+
+
+def batch_graphs(
+    graphs: List[jraph.GraphsTuple],
+    pad_to_nodes: Optional[int] = None,
+    pad_to_edges: Optional[int] = None,
+    pad_to_graphs: Optional[int] = None,
+) -> jraph.GraphsTuple:
+    """Batch multiple graphs into a single padded GraphsTuple.
+
+    Padding ensures consistent shapes for JIT compilation efficiency.
+
+    Args:
+        graphs: List of individual GraphsTuple objects
+        pad_to_nodes: Pad total nodes to this number (default: auto)
+        pad_to_edges: Pad total edges to this number (default: auto)
+        pad_to_graphs: Pad to this many graphs (default: len(graphs) + 1)
+
+    Returns:
+        Single batched and padded GraphsTuple
+    """
+    batched = jraph.batch(graphs)
+
+    # Calculate padding sizes if not provided
+    n_nodes = int(batched.n_node.sum())
+    n_edges = int(batched.n_edge.sum())
+    n_graphs = len(graphs)
+
+    if pad_to_nodes is None:
+        pad_to_nodes = n_nodes + 1  # +1 for padding graph
+    if pad_to_edges is None:
+        pad_to_edges = n_edges + 1
+    if pad_to_graphs is None:
+        pad_to_graphs = n_graphs + 1
+
+    # Pad the batch for consistent shapes
+    return jraph.pad_with_graphs(
+        batched,
+        n_node=pad_to_nodes,
+        n_edge=pad_to_edges,
+        n_graph=pad_to_graphs,
+    )
+
+
+def unbatch_graphs(batched: jraph.GraphsTuple) -> List[jraph.GraphsTuple]:
+    """Unbatch a batched GraphsTuple back to individual graphs.
+
+    Args:
+        batched: Batched GraphsTuple
+
+    Returns:
+        List of individual GraphsTuple objects
+    """
+    return jraph.unbatch(batched)  # type: ignore[no-any-return]
 
 
 class MolecularDataset:
-    """A dataset class for handling molecular data in graph format.
-
-    This class provides functionality to load molecular data from CSV files or pandas
-    DataFrames, convert SMILES strings to graph representations, and manage the dataset
-    for training and evaluation. It supports batching, splitting, and random access to
-    molecular graphs and their labels.
+    """Dataset class for molecular graphs using jraph format.
 
     Attributes:
-        df: pandas DataFrame containing the original data
-        smiles_col: Name of the column containing SMILES strings
-        label_col: Name of the column containing labels
-        graphs: List of molecular graphs as (node_features, adjacency_matrix) tuples
-        labels: jnp.ndarray containing the labels for all molecules
+        graphs: List of jraph.GraphsTuple objects
+        labels: Array of property labels
+        n_node_features: Number of node features
     """
 
     def __init__(
         self,
-        df: Union[pd.DataFrame, str],
+        data: Union[pd.DataFrame, str, Path],
         smiles_col: str = "smiles",
         label_col: str = "property",
     ):
-        """Initialize a MolecularDataset instance.
+        """Initialize dataset from DataFrame or CSV file.
 
         Args:
-            df: Either a pandas DataFrame or a path to a CSV file containing the data
-            smiles_col: Name of the column containing SMILES strings. Defaults to
-                        'smiles'
-            label_col: Name of the column containing labels. Defaults to 'property'
-
-        Raises:
-            ValueError: If the specified column names are not found in the DataFrame
+            data: DataFrame or path to CSV file
+            smiles_col: Column name for SMILES strings
+            label_col: Column name for property labels
         """
-        logger.info(
-            f"Initializing MolecularDataset with columns: {smiles_col} (SMILES), "
-            f"{label_col} (property)"
-        )
+        logger.info("Initializing MolecularDataset")
 
-        if isinstance(df, str) or isinstance(df, Path):
-            logger.info(f"Loading data from file: {df}")
-            self.df = pd.read_csv(df)
+        if isinstance(data, (str, Path)):
+            logger.info(f"Loading data from file: {data}")
+            df = pd.read_csv(data)
         else:
-            logger.info("Using provided DataFrame")
-            self.df = df
+            df = data
 
-        self.smiles_col = smiles_col
-        self.label_col = label_col
+        if smiles_col not in df.columns:
+            raise ValueError(f"Column '{smiles_col}' not found")
+        if label_col not in df.columns:
+            raise ValueError(f"Column '{label_col}' not found")
 
-        # Validate columns
-        if smiles_col not in self.df.columns:
-            error_msg = f"SMILES column '{smiles_col}' not found in DataFrame"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-        if label_col not in self.df.columns:
-            error_msg = f"Property column '{label_col}' not found in DataFrame"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+        # Convert SMILES to jraph graphs
+        logger.info("Converting SMILES to jraph graphs")
+        self.graphs: List[jraph.GraphsTuple] = []
+        self.labels: List[float] = []
 
-        # Convert SMILES to graphs
-        logger.info("Converting SMILES strings to molecular graphs")
-        self.graphs = []
-        invalid_smiles = 0
-        for smiles in self.df[smiles_col]:
+        for idx, row in df.iterrows():
             try:
-                graph = smiles_to_graph(smiles)
+                graph = smiles_to_jraph(row[smiles_col])
                 self.graphs.append(graph)
+                self.labels.append(float(row[label_col]))
             except ValueError as e:
-                logger.warning(f"Skipping invalid SMILES: {e}")
-                invalid_smiles += 1
+                logger.warning(f"Skipping invalid SMILES at index {idx}: {e}")
 
-        if invalid_smiles > 0:
-            logger.warning(f"Skipped {invalid_smiles} invalid SMILES strings")
+        self.labels = jnp.array(self.labels, dtype=jnp.float32)
+        self.n_node_features = self.graphs[0].nodes.shape[1] if self.graphs else 6
 
-        self.labels = jnp.array(self.df[label_col])
-        logger.info(f"Initialized {len(self)} molecules with property: {label_col}")
+        logger.info(f"Loaded {len(self.graphs)} molecules")
 
     def __len__(self) -> int:
-        """Get the number of molecules in the dataset.
-
-        Returns:
-            int: Number of molecules in the dataset
-        """
         return len(self.graphs)
 
-    def __getitem__(
-        self, index: int
-    ) -> Tuple[Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray]:
-        """Get a single molecule and its label by index.
+    def __getitem__(self, idx: int) -> Tuple[jraph.GraphsTuple, float]:
+        return self.graphs[idx], self.labels[idx]
+
+    def get_batched(
+        self,
+        indices: Optional[List[int]] = None,
+        pad_to_nodes: Optional[int] = None,
+        pad_to_edges: Optional[int] = None,
+        pad_to_graphs: Optional[int] = None,
+    ) -> Tuple[jraph.GraphsTuple, jnp.ndarray]:
+        """Get a batched GraphsTuple for the specified indices.
 
         Args:
-            index: Integer index of the molecule to retrieve
+            indices: List of indices to include. If None, returns all data.
+            pad_to_nodes: Pad to this many nodes for consistent JIT shapes
+            pad_to_edges: Pad to this many edges
+            pad_to_graphs: Pad to this many graphs
 
         Returns:
-            Tuple containing:
-                - graph: Tuple of (node_features, adjacency_matrix)
-                - property: jnp.ndarray containing the molecule's property
+            Tuple of (batched_graphs, labels)
         """
-        logger.debug(f"Retrieving molecule at index {index}")
-        return self.graphs[index], self.labels[index]
+        if indices is None:
+            indices = list(range(len(self.graphs)))
 
-    def get_batch(
-        self, indices: List[int]
-    ) -> Tuple[List[Tuple[jnp.ndarray, jnp.ndarray]], jnp.ndarray]:
-        """Get a batch of molecular graphs and their labels.
+        graphs = [self.graphs[i] for i in indices]
+        labels = self.labels[jnp.array(indices)]
 
-        This method is useful for creating mini-batches during training. It returns
-        the graphs and labels for the specified indices.
+        batched = batch_graphs(graphs, pad_to_nodes, pad_to_edges, pad_to_graphs)
+        return batched, labels
+
+    def compute_padding_sizes(self, batch_size: int) -> Tuple[int, int, int]:
+        """Compute fixed padding sizes for efficient JIT compilation.
 
         Args:
-            indices: List of integer indices specifying which molecules to include
-                    in the batch
+            batch_size: Maximum batch size
 
         Returns:
-            Tuple containing:
-                - batch_graphs: List of (node_features, adjacency_matrix) tuples
-                - batch_property: jnp.ndarray containing the property for the batch
+            Tuple of (max_nodes, max_edges, n_graphs) for padding
         """
-        logger.debug(f"Retrieving batch of {len(indices)} molecules")
-        batch_graphs = [self.graphs[i] for i in indices]
-        batch_labels = self.labels[indices]
-        return batch_graphs, batch_labels
+        # Find max nodes and edges across all graphs
+        max_nodes_per_graph = max(int(g.n_node[0]) for g in self.graphs)
+        max_edges_per_graph = max(int(g.n_edge[0]) for g in self.graphs)
 
-    def split_train_test(
+        # Compute totals for a full batch + padding graph
+        pad_nodes = max_nodes_per_graph * batch_size + 1
+        pad_edges = max_edges_per_graph * batch_size + 1
+        pad_graphs = batch_size + 1
+
+        return pad_nodes, pad_edges, pad_graphs
+
+    def split(
         self, test_size: float = 0.2, seed: Optional[int] = None
     ) -> Tuple["MolecularDataset", "MolecularDataset"]:
-        """Split the dataset into training and test sets.
-
-        This method randomly splits the dataset into training and test sets while
-        maintaining the original data distribution. The split is reproducible if
-        a seed is provided.
+        """Split dataset into train and test sets.
 
         Args:
-            test_size: Fraction of the dataset to use for testing (between 0 and 1).
-                      Defaults to 0.2 (20% test set)
-            seed: Optional random seed for reproducibility. If None, the split will
-                 be random
+            test_size: Fraction for test set
+            seed: Random seed for reproducibility
 
         Returns:
-            Tuple containing:
-                - train_dataset: MolecularDataset instance containing the training data
-                - test_dataset: MolecularDataset instance containing the test data
+            Tuple of (train_dataset, test_dataset)
         """
-        logger.info(f"Splitting dataset with test_size={test_size}, seed={seed}")
-        if seed is not None:
-            np.random.seed(seed)
+        logger.info(f"Splitting dataset: test_size={test_size}, seed={seed}")
 
-        n_samples = len(self)
-        n_test = int(test_size * n_samples)
+        rng = np.random.default_rng(seed)
+        n = len(self.graphs)
+        indices = rng.permutation(n)
 
-        indices = np.random.permutation(n_samples)
-        test_indices = indices[:n_test]
-        train_indices = indices[n_test:]
+        n_test = int(test_size * n)
+        test_idx = indices[:n_test]
+        train_idx = indices[n_test:]
 
-        train_df = self.df.iloc[train_indices].reset_index(drop=True)
-        test_df = self.df.iloc[test_indices].reset_index(drop=True)
+        train_dataset = MolecularDataset.__new__(MolecularDataset)
+        train_dataset.graphs = [self.graphs[i] for i in train_idx]
+        train_dataset.labels = self.labels[train_idx]  # type: ignore[assignment]
+        train_dataset.n_node_features = self.n_node_features
 
-        logger.info(
-            f"Split complete: {len(train_indices)} training samples, "
-            f"{len(test_indices)} test samples"
-        )
+        test_dataset = MolecularDataset.__new__(MolecularDataset)
+        test_dataset.graphs = [self.graphs[i] for i in test_idx]
+        test_dataset.labels = self.labels[test_idx]  # type: ignore[assignment]
+        test_dataset.n_node_features = self.n_node_features
 
-        train_dataset = MolecularDataset(
-            df=train_df, smiles_col=self.smiles_col, label_col=self.label_col
-        )
-        test_dataset = MolecularDataset(
-            df=test_df, smiles_col=self.smiles_col, label_col=self.label_col
-        )
-
+        logger.info(f"Split: {len(train_dataset)} train, {len(test_dataset)} test")
         return train_dataset, test_dataset
 
 
-def collate_fn(
-    batch_graphs: List[Tuple[jnp.ndarray, jnp.ndarray]],
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    """Collate a batch of molecular graphs into padded arrays.
+# Legacy aliases for backward compatibility
+def smiles_to_graph(smiles: str) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """Legacy function - converts to node features and adjacency matrix."""
+    graph = smiles_to_jraph(smiles)
+    n_nodes = int(graph.n_node[0])
 
-    This function is used to prepare batches of molecular graphs for processing in
-    graph neural networks. It handles variable-sized graphs by padding them to the
-    size of the largest graph in the batch.
+    # Reconstruct adjacency matrix from edges
+    adj = jnp.zeros((n_nodes, n_nodes))
+    for s, r, e in zip(graph.senders, graph.receivers, graph.edges):
+        if s != r:  # Skip self-loops for adjacency
+            adj = adj.at[int(s), int(r)].set(float(e[0]))
 
-    Args:
-        batch_graphs: List of (node_features, adjacency_matrix) tuples representing
-                     the molecular graphs in the batch
-
-    Returns:
-        Tuple containing:
-            - padded_features: jnp.ndarray of shape (batch_size, max_nodes, n_features)
-                              containing the padded node features
-            - padded_adjacency: jnp.ndarray of shape (batch_size, max_nodes, max_nodes)
-                               containing the padded adjacency matrices
-    """
-    logger.debug(f"Collating batch of {len(batch_graphs)} graphs")
-    # Find maximum number of nodes
-    max_nodes = max(features.shape[0] for features, _ in batch_graphs)
-    logger.debug(f"Maximum number of nodes in batch: {max_nodes}")
-
-    # Pad node features and adjacency matrices
-    padded_features = []
-    padded_adjacency = []
-
-    for features, adjacency in batch_graphs:
-        n_nodes = features.shape[0]
-        n_features = features.shape[1]
-
-        # Pad features
-        padded_f = jnp.zeros((max_nodes, n_features))
-        padded_f = padded_f.at[:n_nodes].set(features)
-        padded_features.append(padded_f)
-
-        # Pad adjacency
-        padded_a = jnp.zeros((max_nodes, max_nodes))
-        padded_a = padded_a.at[:n_nodes, :n_nodes].set(adjacency)
-        padded_adjacency.append(padded_a)
-
-    logger.debug("Batch collation complete")
-    return jnp.stack(padded_features), jnp.stack(padded_adjacency)
+    return graph.nodes, adj

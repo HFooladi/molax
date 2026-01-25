@@ -1,153 +1,160 @@
-from typing import Callable, List, Tuple
+"""Acquisition functions for active learning using jraph graphs."""
+
+from typing import List
 
 import jax.numpy as jnp
+import jraph
+
+from molax.models.gcn import UncertaintyGCN
+from molax.utils.data import batch_graphs
 
 
 def uncertainty_sampling(
-    model: Callable[..., Tuple[jnp.ndarray, jnp.ndarray]],
-    pool_data: List[Tuple[jnp.ndarray, jnp.ndarray]],
+    model: UncertaintyGCN,
+    pool_graphs: List[jraph.GraphsTuple],
     n_samples: int = 10,
 ) -> jnp.ndarray:
-    """
-    Select samples based on predictive uncertainty using Monte Carlo (MC) dropout.
-    This function estimates the uncertainty of predictions for each molecule in the pool
-    by performing multiple forward passes with dropout enabled.
+    """Compute uncertainty scores for pool samples using MC dropout.
 
     Args:
-        model: UncertaintyGCN model that supports MC dropout during inference
-        pool_data: List of tuples containing (features, adjacency) matrices for each
-                  molecule in the unlabeled pool. Features should be of shape
-                  (n_nodes, n_features) and adjacency matrices should be of shape
-                  (n_nodes, n_nodes)
-        n_samples: Number of MC samples to use for uncertainty estimation. Higher
-                  values provide more accurate uncertainty estimates but increase
-                  computation time
+        model: UncertaintyGCN model
+        pool_graphs: List of jraph.GraphsTuple for pool samples
+        n_samples: Number of MC dropout samples
 
     Returns:
-        jnp.ndarray: Array of shape (n_pool,) containing uncertainty scores for each
-                    molecule in the pool. Higher scores indicate higher uncertainty.
+        Array of uncertainty scores for each pool sample
     """
-    uncertainties = []
+    if not pool_graphs:
+        return jnp.array([])
 
-    for x, adj in pool_data:
-        # Collect MC samples
-        predictions = []
-        for _ in range(n_samples):
-            mean, var = model(x, adj, training=True)
-            predictions.append(mean)
+    n_pool = len(pool_graphs)
 
-        # Calculate predictive uncertainty
-        predictions = jnp.stack(predictions)
-        uncertainty = jnp.mean(jnp.var(predictions, axis=0))
-        uncertainties.append(uncertainty)
+    # Batch all pool graphs for efficient processing
+    batched = batch_graphs(pool_graphs)
 
-    return jnp.array(uncertainties)
+    # Collect MC samples
+    predictions = []
+    for _ in range(n_samples):
+        mean, _ = model(batched, training=True)
+        predictions.append(mean.squeeze(-1))
+
+    # Stack predictions: [n_samples, n_graphs_with_padding]
+    predictions = jnp.stack(predictions, axis=0)
+
+    # Compute variance across MC samples for each pool item
+    uncertainties = jnp.var(predictions, axis=0)
+
+    # Return only scores for actual graphs (exclude padding graph)
+    return uncertainties[:n_pool]
 
 
 def diversity_sampling(
-    pool_data: List[Tuple[jnp.ndarray, jnp.ndarray]],
-    labeled_data: List[Tuple[jnp.ndarray, jnp.ndarray]],
+    pool_graphs: List[jraph.GraphsTuple],
+    labeled_graphs: List[jraph.GraphsTuple],
     n_select: int,
 ) -> List[int]:
-    """
-    Select diverse samples from the unlabeled pool using a maximum distance criterion.
-    This function implements a greedy algorithm to select molecules that are maximally
-    different from both the labeled set and previously selected molecules.
+    """Select diverse samples using greedy farthest point sampling.
+
+    Uses mean node features as molecular fingerprints.
 
     Args:
-        pool_data: List of tuples containing (features, adjacency) matrices for each
-                  molecule in the unlabeled pool
-        labeled_data: List of tuples containing (features, adjacency) matrices for each
-                     molecule in the labeled set
-        n_select: Number of samples to select from the pool
+        pool_graphs: List of pool sample graphs
+        labeled_graphs: List of labeled sample graphs
+        n_select: Number of samples to select
 
     Returns:
-        List[int]: List of indices corresponding to the selected molecules in the
-                  pool_data list. The length of the returned list will be n_select.
+        List of selected indices into pool_graphs
     """
-    # Extract mean node features as molecular fingerprints
-    pool_fps = [jnp.mean(x, axis=0) for x, _ in pool_data]
-    labeled_fps = [jnp.mean(x, axis=0) for x, _ in labeled_data]
+    if not pool_graphs:
+        return []
+
+    n_select = min(n_select, len(pool_graphs))
+
+    # Compute fingerprints as mean of node features
+    def get_fingerprint(graph: jraph.GraphsTuple) -> jnp.ndarray:
+        return jnp.mean(graph.nodes, axis=0)
+
+    pool_fps = [get_fingerprint(g) for g in pool_graphs]
+    labeled_fps = [get_fingerprint(g) for g in labeled_graphs] if labeled_graphs else []
 
     selected: List[int] = []
 
-    # Greedily select most distant points
     for _ in range(n_select):
-        if not selected:
-            # Select point furthest from labeled set
-            distances = []
-            for i, pool_fp in enumerate(pool_fps):
-                min_dist = float("inf")
-                for labeled_fp in labeled_fps:
-                    dist = jnp.linalg.norm(pool_fp - labeled_fp)
-                    min_dist = min(min_dist, dist)
-                distances.append(min_dist)
-            selected.append(int(jnp.argmax(jnp.array(distances))))
-        else:
-            # Select point furthest from both labeled and selected points
-            distances = []
-            for i, pool_fp in enumerate(pool_fps):
-                if i in selected:
-                    distances.append(-float("inf"))
-                    continue
+        best_idx = -1
+        best_min_dist = -float("inf")
 
-                min_dist = float("inf")
-                # Distance to labeled set
-                for labeled_fp in labeled_fps:
-                    dist = jnp.linalg.norm(pool_fp - labeled_fp)
-                    min_dist = min(min_dist, dist)
-                # Distance to selected set
-                for j in selected:
-                    dist = jnp.linalg.norm(pool_fp - pool_fps[j])
-                    min_dist = min(min_dist, dist)
-                distances.append(min_dist)
-            selected.append(int(jnp.argmax(jnp.array(distances))))
+        for i in range(len(pool_graphs)):
+            if i in selected:
+                continue
+
+            # Compute minimum distance to labeled and selected sets
+            min_dist = float("inf")
+
+            for fp in labeled_fps:
+                dist = float(jnp.linalg.norm(pool_fps[i] - fp))
+                min_dist = min(min_dist, dist)
+
+            for j in selected:
+                dist = float(jnp.linalg.norm(pool_fps[i] - pool_fps[j]))
+                min_dist = min(min_dist, dist)
+
+            if min_dist > best_min_dist:
+                best_min_dist = min_dist
+                best_idx = i
+
+        if best_idx >= 0:
+            selected.append(best_idx)
 
     return selected
 
 
 def combined_acquisition(
-    model: Callable[..., Tuple[jnp.ndarray, jnp.ndarray]],
-    pool_data: List[Tuple[jnp.ndarray, jnp.ndarray]],
-    labeled_data: List[Tuple[jnp.ndarray, jnp.ndarray]],
+    model: UncertaintyGCN,
+    pool_graphs: List[jraph.GraphsTuple],
+    labeled_graphs: List[jraph.GraphsTuple],
     n_select: int,
     uncertainty_weight: float = 0.7,
+    n_mc_samples: int = 10,
 ) -> List[int]:
-    """
-    Combine uncertainty and diversity sampling strategies for active learning.
-    This function implements a hybrid acquisition strategy that balances exploration
-    (diversity) and exploitation (uncertainty) when selecting new samples.
+    """Combined uncertainty and diversity acquisition.
 
     Args:
-        model: UncertaintyGCN model that supports MC dropout during inference
-        pool_data: List of tuples containing (features, adjacency) matrices for each
-                  molecule in the unlabeled pool
-        labeled_data: List of tuples containing (features, adjacency) matrices for each
-                     molecule in the labeled set
-        n_select: Number of samples to select from the pool
-        uncertainty_weight: Float between 0 and 1 indicating the relative importance of
-                           uncertainty vs diversity. A value of 1.0 means pure
-                           uncertainty sampling, while 0.0 means pure diversity
-                           sampling.
+        model: UncertaintyGCN model
+        pool_graphs: List of pool sample graphs
+        labeled_graphs: List of labeled sample graphs
+        n_select: Number of samples to select
+        uncertainty_weight: Weight for uncertainty vs diversity (0-1)
+        n_mc_samples: Number of MC samples for uncertainty estimation
 
     Returns:
-        List[int]: List of indices corresponding to the selected molecules in the
-                  pool_data list. The length of the returned list will be n_select.
+        List of selected indices into pool_graphs
     """
-    # Get uncertainty scores
-    uncertainties = uncertainty_sampling(model, pool_data)
+    if not pool_graphs:
+        return []
 
-    # Get diversity scores
-    diversity_indices = diversity_sampling(pool_data, labeled_data, n_select)
-    diversity_scores = jnp.zeros(len(pool_data))
-    diversity_scores = diversity_scores.at[diversity_indices].set(1.0)
+    n_select = min(n_select, len(pool_graphs))
+
+    # Get uncertainty scores
+    uncertainties = uncertainty_sampling(model, pool_graphs, n_mc_samples)
+
+    # Normalize uncertainties to [0, 1]
+    if jnp.max(uncertainties) > 0:
+        norm_uncertainties = uncertainties / jnp.max(uncertainties)
+    else:
+        norm_uncertainties = uncertainties
+
+    # Get diversity indices and create diversity scores
+    diversity_indices = diversity_sampling(pool_graphs, labeled_graphs, n_select)
+    diversity_scores = jnp.zeros(len(pool_graphs))
+    diversity_scores = diversity_scores.at[jnp.array(diversity_indices)].set(1.0)
 
     # Combine scores
-    combined_scores = (
-        uncertainty_weight * uncertainties / jnp.max(uncertainties)
+    combined = (
+        uncertainty_weight * norm_uncertainties
         + (1 - uncertainty_weight) * diversity_scores
     )
 
     # Select top scoring samples
-    indices = jnp.argsort(combined_scores)[-n_select:]
-    return [int(idx) for idx in indices]
+    top_indices = jnp.argsort(-combined)[:n_select]
+
+    return [int(i) for i in top_indices]

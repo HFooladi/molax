@@ -2,89 +2,110 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11-blue.svg)](https://www.python.org/downloads/)
-[![Documentation Status](https://readthedocs.org/projects/molax/badge/?version=latest)](https://molax.readthedocs.io/en/latest/?badge=latest)
-[![Tests](https://github.com/HFooladi/molax/actions/workflows/tests.yml/badge.svg)](https://github.com/HFooladi/molax/actions/workflows/ci.yml)
 
-Molecular active learning with JAX - a lightweight framework for active learning in molecular property prediction.
+Molecular active learning with JAX - a high-performance framework for active learning in molecular property prediction.
 
 ## Key Features
 
-- 🧠 Graph neural networks implemented in JAX/Flax for molecular representation learning
-- 🔄 Complete active learning workflow for molecular property prediction
-- 🎯 Multiple acquisition functions for diverse exploration strategies
+- **Fast**: Uses [jraph](https://github.com/deepmind/jraph) for efficient batched graph processing (~400x faster than naive implementations)
+- **GPU-accelerated**: Full JAX/Flax NNX integration with JIT compilation
+- **Uncertainty quantification**: MC dropout for epistemic uncertainty estimation
+- **Multiple acquisition functions**: Random, uncertainty, and combined strategies
 
 ## Installation
 
 ```bash
 git clone https://github.com/HFooladi/molax
 cd molax
-pip install -r requirements.txt
+pip install -e .
 ```
 
-Required dependencies:
-```
-jax
-flax
-optax
-rdkit
-pandas
-numpy
-```
-
-## Usage
-
-Basic usage with SMILES data:
+## Quick Start
 
 ```python
-import flax.nnx as nnx
-import optax
+import jraph
 from molax.utils.data import MolecularDataset
-from molax.models.gcn import UncertaintyGCN, UncertaintyGCNConfig
+from molax.models.gcn import GCNConfig, UncertaintyGCN
 
-# Load your data
-dataset = MolecularDataset('datasets/molecules.csv')
+# Load data
+dataset = MolecularDataset('datasets/esol.csv')
+train_data, test_data = dataset.split(test_size=0.2, seed=42)
 
-# Split dataset
-train_data, test_data = dataset.split_train_test(test_size=0.2)
+# Batch all data once (key for performance!)
+train_graphs = jraph.batch(train_data.graphs)
+train_labels = train_data.labels
 
-# Initialize model
-config = UncertaintyGCNConfig(
-    in_features=train_data.graphs[0][0].shape[1],
+# Create model
+config = GCNConfig(
+    node_features=6,
     hidden_features=[64, 64],
     out_features=1,
     dropout_rate=0.1,
 )
-model = UncertaintyGCN(config)
+model = UncertaintyGCN(config, rngs=nnx.Rngs(0))
 
-# Initialize optimizer
-model_and_opt = nnx.ModelAndOptimizer(model, optax.adam(1e-3))
+# Training with JIT compilation
+@nnx.jit
+def train_step(model, optimizer, mask):
+    def loss_fn(model):
+        mean, var = model(train_graphs, training=True)
+        nll = 0.5 * (jnp.log(var) + (train_labels - mean) ** 2 / var)
+        return jnp.sum(jnp.where(mask, nll, 0.0)) / jnp.sum(mask)
 
-# Run active learning loop
-# See examples/simple_active_learning.py for complete implementation
+    loss, grads = nnx.value_and_grad(loss_fn)(model)
+    optimizer.update(model, grads)
+    return loss
+
+# Use masking for active learning (avoids JIT recompilation)
+labeled_mask = jnp.zeros(len(train_data), dtype=bool)
+labeled_mask = labeled_mask.at[:50].set(True)  # Start with 50 labeled
+
+loss = train_step(model, optimizer, labeled_mask)
 ```
 
-## Features
+## Performance
 
-- Graph neural networks implemented in JAX/Flax
-- Uncertainty estimation via MC dropout
-- Multiple acquisition functions
-- Efficient batch selection
-- RDKit-based molecular processing
+The key to performance is **batching all data once** and using **masking** for active learning:
+
+| Approach | Time (10 iterations, 50 epochs each) |
+|----------|--------------------------------------|
+| Naive (graph-by-graph) | >10 minutes |
+| Optimized (jraph + masking) | ~1.4 seconds |
+
+**~400x speedup** by avoiding JIT recompilation.
+
+## Datasets
+
+- `datasets/esol.csv` - ESOL dataset with 1,128 molecules and aqueous solubility values
+
+Download the ESOL dataset:
+```bash
+python scripts/download_esol.py
+```
 
 ## Examples
 
-Check `examples/simple_active_learning.py` for a complete active learning pipeline with uncertainty-based acquisition.
+```bash
+# Simple active learning demo
+python examples/simple_active_learning.py
 
-For uncertainty quantification demonstration, see `examples/uncertainty_gcn_demo.py`.
+# Benchmark comparing acquisition strategies
+python examples/active_learning_benchmark.py
+```
 
-## Contributing
+## Architecture
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+### Data Flow
+```
+SMILES → smiles_to_jraph() → jraph.GraphsTuple → jraph.batch() → Model
+```
 
+### Key Components
+
+- **`MolecularDataset`**: Loads SMILES, converts to jraph graphs
+- **`UncertaintyGCN`**: GCN with mean/variance heads for uncertainty
+- **`uncertainty_sampling`**: MC dropout-based acquisition
+- **`diversity_sampling`**: Feature-space diversity selection
 
 ## Citation
 
@@ -93,17 +114,10 @@ For uncertainty quantification demonstration, see `examples/uncertainty_gcn_demo
   title={molax: Molecular Active Learning with JAX},
   author={Hosein Fooladi},
   year={2025},
-  url={https://github.com/hfooladi/molax},
-  description={A lightweight framework for active learning in molecular property prediction}
-
+  url={https://github.com/hfooladi/molax}
 }
 ```
 
 ## License
 
 MIT License
-
-## Acknowledgements
-
-- This project builds upon the excellent JAX, Flax, and RDKit libraries.
-- Thanks to all contributors who have helped improve this project.
