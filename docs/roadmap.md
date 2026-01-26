@@ -80,7 +80,9 @@ class DeepEnsemble(nnx.Module):
 
 ---
 
-### 1.2 Evidential Deep Learning
+### 1.2 Evidential Deep Learning ✅
+
+**Status:** Implemented in `molax/models/evidential.py`
 
 **What:** Directly predict uncertainty without MC sampling by modeling output as a higher-order distribution (Normal-Inverse-Gamma).
 
@@ -132,10 +134,10 @@ def evidential_uncertainty(nu, alpha, beta):
 ```
 
 **Acceptance Criteria:**
-- [ ] `EvidentialGCN` model variant
-- [ ] NIG loss function with configurable regularization
-- [ ] Separate aleatoric/epistemic uncertainty outputs
-- [ ] Comparison with MC Dropout on OOD detection
+- [x] `EvidentialGCN` model variant
+- [x] NIG loss function with configurable regularization
+- [x] Separate aleatoric/epistemic uncertainty outputs
+- [x] Comparison with MC Dropout on OOD detection (in tests)
 
 ---
 
