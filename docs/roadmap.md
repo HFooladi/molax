@@ -141,7 +141,9 @@ def evidential_uncertainty(nu, alpha, beta):
 
 ---
 
-### 1.3 Calibration Metrics
+### 1.3 Calibration Metrics ✅
+
+**Status:** Implemented in `molax/metrics/`
 
 **What:** Quantify how well predicted uncertainties match actual error frequencies.
 
@@ -151,61 +153,48 @@ def evidential_uncertainty(nu, alpha, beta):
 
 ```python
 # molax/metrics/calibration.py
-import jax.numpy as jnp
+from molax.metrics import (
+    expected_calibration_error,
+    negative_log_likelihood,
+    compute_calibration_curve,
+    sharpness,
+    evaluate_calibration,
+    TemperatureScaling,
+    plot_reliability_diagram,
+    plot_calibration_comparison,
+    create_calibration_report,
+)
 
-def expected_calibration_error(
-    predictions: jnp.ndarray,
-    uncertainties: jnp.ndarray,
-    targets: jnp.ndarray,
-    n_bins: int = 10
-) -> float:
-    """
-    ECE: Average gap between confidence and accuracy across bins.
-    Lower is better. Perfect calibration = 0.
-    """
-    errors = jnp.abs(predictions - targets)
-    confidences = 1.0 / (1.0 + uncertainties)  # Convert variance to confidence
+# Compute ECE
+ece = expected_calibration_error(predictions, uncertainties, targets, n_bins=10)
 
-    bin_boundaries = jnp.linspace(0, 1, n_bins + 1)
-    ece = 0.0
+# Compute NLL (proper scoring rule)
+nll = negative_log_likelihood(mean, var, targets)
 
-    for i in range(n_bins):
-        mask = (confidences >= bin_boundaries[i]) & (confidences < bin_boundaries[i+1])
-        if jnp.sum(mask) > 0:
-            bin_confidence = jnp.mean(confidences[mask])
-            bin_accuracy = 1.0 - jnp.mean(errors[mask])  # Normalized
-            ece += jnp.sum(mask) * jnp.abs(bin_accuracy - bin_confidence)
+# Comprehensive evaluation
+metrics = evaluate_calibration(mean, var, targets)
+# Returns: {'nll': ..., 'ece': ..., 'rmse': ..., 'sharpness': ..., 'mean_z_score': ...}
 
-    return ece / len(predictions)
+# Temperature scaling for post-hoc calibration
+scaler = TemperatureScaling()
+scaler.fit(val_mean, val_var, val_targets)
+calibrated_var = scaler.transform(test_var)
+print(f"Learned temperature: {scaler.temperature}")
 
-def reliability_diagram_data(
-    predictions: jnp.ndarray,
-    uncertainties: jnp.ndarray,
-    targets: jnp.ndarray,
-    n_bins: int = 10
-) -> dict:
-    """Returns data for plotting reliability diagrams."""
-    # ... bin confidences and accuracies for visualization
-    pass
-
-def negative_log_likelihood(mean, var, targets):
-    """Proper scoring rule for probabilistic predictions."""
-    return 0.5 * (jnp.log(2 * jnp.pi * var) + (targets - mean)**2 / var)
-
-def calibration_temperature_scaling(
-    val_predictions, val_uncertainties, val_targets
-) -> float:
-    """Learn temperature T to scale uncertainties for calibration."""
-    # ... optimize T to minimize NLL on validation set
-    pass
+# Visualization
+plot_reliability_diagram(predictions, uncertainties, targets)
+fig = plot_calibration_comparison({
+    "Model A": (preds_a, var_a, targets),
+    "Model B": (preds_b, var_b, targets),
+})
 ```
 
 **Acceptance Criteria:**
-- [ ] ECE computation (Expected Calibration Error)
-- [ ] Reliability diagram plotting utility
-- [ ] NLL as proper scoring rule
-- [ ] Temperature scaling for post-hoc calibration
-- [ ] Integration into evaluation pipeline
+- [x] ECE computation (Expected Calibration Error)
+- [x] Reliability diagram plotting utility
+- [x] NLL as proper scoring rule
+- [x] Temperature scaling for post-hoc calibration
+- [x] Integration into evaluation pipeline
 
 ---
 
