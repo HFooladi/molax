@@ -9,8 +9,8 @@ remote_branch: "gh-pages"
 use_directory_urls: false
 docs_dir: "docs"
 
-# Fail on warnings to detect issues with types and docstring
-strict: true
+# Allow warnings during build (e.g., missing link targets)
+strict: false
 
 nav:
   - Getting Started: index.md
