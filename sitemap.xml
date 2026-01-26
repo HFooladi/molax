@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://hfooladi.github.io/molax/index.html</loc>
+         <lastmod>2026-01-26</lastmod>
+    </url>
+    <url>
+         <loc>https://hfooladi.github.io/molax/concepts.html</loc>
+         <lastmod>2026-01-26</lastmod>
+    </url>
+    <url>
+         <loc>https://hfooladi.github.io/molax/roadmap.html</loc>
+         <lastmod>2026-01-26</lastmod>
+    </url>
+    <url>
+         <loc>https://hfooladi.github.io/molax/api/acquisition.html</loc>
+         <lastmod>2026-01-26</lastmod>
+    </url>
+    <url>
+         <loc>https://hfooladi.github.io/molax/api/data.html</loc>
+         <lastmod>2026-01-26</lastmod>
+    </url>
+    <url>
+         <loc>https://hfooladi.github.io/molax/api/metrics.html</loc>
+         <lastmod>2026-01-26</lastmod>
+    </url>
+    <url>
+         <loc>https://hfooladi.github.io/molax/api/models.html</loc>
+         <lastmod>2026-01-26</lastmod>
+    </url>
+</urlset>
