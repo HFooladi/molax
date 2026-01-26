@@ -566,6 +566,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#molax.models.gcn.UncertaintyGCN.extract_embeddings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        extract_embeddings
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -705,6 +716,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#molax.models.ensemble.DeepEnsemble.extract_embeddings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        extract_embeddings
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -799,6 +821,17 @@
     <span class="md-ellipsis">
       
         __call__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#molax.models.evidential.EvidentialGCN.extract_embeddings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        extract_embeddings
       
     </span>
   </a>
@@ -1075,6 +1108,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#molax.models.gcn.UncertaintyGCN.extract_embeddings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        extract_embeddings
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1214,6 +1258,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#molax.models.ensemble.DeepEnsemble.extract_embeddings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        extract_embeddings
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1308,6 +1363,17 @@
     <span class="md-ellipsis">
       
         __call__
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#molax.models.evidential.EvidentialGCN.extract_embeddings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        extract_embeddings
       
     </span>
   </a>
@@ -1669,6 +1735,109 @@
             <td>
               <div class="doc-md-description">
                 <p>Tuple of (mean, variance) each of shape [n_graphs, out_features]</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="molax.models.gcn.UncertaintyGCN.extract_embeddings" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">extract_embeddings</span>
+
+
+</h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">extract_embeddings</span><span class="p">(</span><span class="n">graph</span><span class="p">:</span> <span class="n">GraphsTuple</span><span class="p">,</span> <span class="n">training</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Extract penultimate layer embeddings (graph-level).</p>
+<p>Extracts the pooled graph representations before the output heads,
+which can be used for Core-Set selection, DPP sampling, or other
+embedding-based acquisition strategies.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>graph</code>
+            </td>
+            <td>
+                  <code><span title="jraph.GraphsTuple">GraphsTuple</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Batched jraph.GraphsTuple</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>training</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether in training mode (enables dropout)</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="jax.numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Embeddings of shape [n_graphs, hidden_dim] where hidden_dim</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="jax.numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>is the last element of hidden_features in the config.</p>
               </div>
             </td>
           </tr>
@@ -2286,6 +2455,100 @@ Provides improved uncertainty estimation by decomposing into:
 
 </div>
 
+<div class="doc doc-object doc-function">
+
+
+<h4 id="molax.models.ensemble.DeepEnsemble.extract_embeddings" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">extract_embeddings</span>
+
+
+</h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">extract_embeddings</span><span class="p">(</span><span class="n">graph</span><span class="p">:</span> <span class="n">GraphsTuple</span><span class="p">,</span> <span class="n">training</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Extract averaged embeddings from all ensemble members.</p>
+<p>Each member extracts embeddings independently, and the results are
+averaged to produce a single embedding per graph. This can be used
+for Core-Set selection, DPP sampling, or other embedding-based
+acquisition strategies.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>graph</code>
+            </td>
+            <td>
+                  <code><span title="jraph.GraphsTuple">GraphsTuple</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Batched jraph.GraphsTuple</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>training</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether in training mode</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="jax.numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Averaged embeddings of shape [n_graphs, hidden_dim]</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
 
 
   </div>
@@ -2725,6 +2988,109 @@ estimation with separation of aleatoric and epistemic components.</p>
                 <ul>
 <li>epistemic_var: Epistemic uncertainty [n_graphs, 1]</li>
 </ul>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="molax.models.evidential.EvidentialGCN.extract_embeddings" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">extract_embeddings</span>
+
+
+</h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">extract_embeddings</span><span class="p">(</span><span class="n">graph</span><span class="p">:</span> <span class="n">GraphsTuple</span><span class="p">,</span> <span class="n">training</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ndarray</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Extract penultimate layer embeddings (graph-level).</p>
+<p>Extracts the pooled graph representations before the evidential head,
+which can be used for Core-Set selection, DPP sampling, or other
+embedding-based acquisition strategies.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>graph</code>
+            </td>
+            <td>
+                  <code><span title="jraph.GraphsTuple">GraphsTuple</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Batched jraph.GraphsTuple</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>training</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether in training mode (enables dropout)</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="jax.numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Embeddings of shape [n_graphs, hidden_dim] where hidden_dim</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="jax.numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>is the last element of hidden_features in the config.</p>
               </div>
             </td>
           </tr>
