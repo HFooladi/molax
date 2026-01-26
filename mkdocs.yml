@@ -1,6 +1,6 @@
 site_name: "molax"
 site_description: "molax: A JAX library for molecular active learning"
-site_url: "https://github.com/HFooladi/molax"
+site_url: "https://hfooladi.github.io/molax/"
 repo_url: "https://github.com/HFooladi/molax"
 repo_name: "HFooladi/molax"
 copyright: Copyright 2024 - 2025 Hosein Fooladi
@@ -13,12 +13,14 @@ docs_dir: "docs"
 strict: true
 
 nav:
-  - Getting started: index.md
-  #- Tutorials:
-      #- The Basics: tutorials/The_Basics.ipynb
-
-  #- API:
-      #- molax: api/molax.md
+  - Getting Started: index.md
+  - Core Concepts: concepts.md
+  - API Reference:
+      - Models: api/models.md
+      - Acquisition: api/acquisition.md
+      - Data: api/data.md
+      - Metrics: api/metrics.md
+  - Roadmap: roadmap.md
 
 theme:
   name: material
@@ -37,8 +39,6 @@ theme:
     - toc.follow
     - content.code.copy
     - content.code.annotate
-  favicon: images/logo-black.svg
-  logo: images/logo-white.svg
 
 extra_css:
   - assets/css/custom-splito.css

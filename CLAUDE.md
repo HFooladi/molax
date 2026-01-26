@@ -9,8 +9,8 @@ Molax is a high-performance JAX framework for molecular active learning. It uses
 ## Quick Commands
 
 ```bash
-# Setup
-source env.sh  # or: pip install -e .[dev]
+# Setup (using uv)
+source env.sh
 
 # Test
 pytest tests/
@@ -19,9 +19,15 @@ pytest tests/
 ruff format .
 ruff check .
 
+# Build docs locally
+uv pip install -e .[docs]
+mkdocs serve
+
 # Run examples
 python examples/simple_active_learning.py
 python examples/active_learning_benchmark.py
+python examples/ensemble_demo.py
+python examples/evidential_demo.py
 ```
 
 ## Architecture
@@ -59,7 +65,7 @@ SMILES string
 jraph.GraphsTuple (single molecule)
     ↓ jraph.batch()
 jraph.GraphsTuple (batched - all molecules as one graph)
-    ↓ UncertaintyGCN
+    ↓ UncertaintyGCN / DeepEnsemble / EvidentialGCN
 (mean, variance) predictions
 ```
 
@@ -67,9 +73,14 @@ jraph.GraphsTuple (batched - all molecules as one graph)
 
 | File | Purpose |
 |------|---------|
-| `molax/models/gcn.py` | `GCNConfig`, `UncertaintyGCN`, `train_step`, `eval_step` |
+| `molax/models/gcn.py` | `GCNConfig`, `UncertaintyGCN`, `MolecularGCN`, `train_step`, `eval_step` |
+| `molax/models/ensemble.py` | `EnsembleConfig`, `DeepEnsemble` for ensemble uncertainty |
+| `molax/models/evidential.py` | `EvidentialConfig`, `EvidentialGCN` for evidential uncertainty |
 | `molax/utils/data.py` | `MolecularDataset`, `smiles_to_jraph`, `batch_graphs` |
-| `molax/acquisition/uncertainty.py` | `uncertainty_sampling`, `diversity_sampling`, `combined_acquisition` |
+| `molax/acquisition/uncertainty.py` | `uncertainty_sampling`, `ensemble_uncertainty_sampling`, `evidential_uncertainty_sampling` |
+| `molax/acquisition/diversity.py` | `diversity_sampling` |
+| `molax/metrics/calibration.py` | `expected_calibration_error`, `calibration_report` |
+| `molax/metrics/visualization.py` | `plot_calibration_curve`, `plot_reliability_diagram` |
 
 ### Model API
 
@@ -88,6 +99,55 @@ model = UncertaintyGCN(config, rngs=nnx.Rngs(0))
 mean, variance = model(batched_graphs, training=True)
 ```
 
+### Ensemble API
+
+```python
+from molax.models.ensemble import EnsembleConfig, DeepEnsemble
+
+config = EnsembleConfig(
+    node_features=6,
+    hidden_features=[64, 64],
+    out_features=1,
+    n_members=5,
+)
+ensemble = DeepEnsemble(config, rngs=nnx.Rngs(0))
+
+# Returns separate epistemic and aleatoric uncertainty
+mean, epistemic_var, aleatoric_var = ensemble(batched_graphs, training=False)
+```
+
+### Evidential API
+
+```python
+from molax.models.evidential import EvidentialConfig, EvidentialGCN
+
+config = EvidentialConfig(
+    node_features=6,
+    hidden_features=[64, 64],
+    out_features=1,
+)
+model = EvidentialGCN(config, rngs=nnx.Rngs(0))
+
+# Single forward pass for both uncertainties
+mean, aleatoric_var, epistemic_var = model(batched_graphs, training=False)
+```
+
+### Calibration Metrics
+
+```python
+from molax.metrics import expected_calibration_error, calibration_report
+from molax.metrics.visualization import plot_calibration_curve
+
+# Compute ECE
+ece = expected_calibration_error(predictions, variances, targets)
+
+# Generate full report
+report = calibration_report(predictions, variances, targets)
+
+# Visualize
+fig = plot_calibration_curve(predictions, variances, targets)
+```
+
 ### Optimizer Pattern (Flax 0.11+)
 
 ```python
@@ -104,7 +164,10 @@ optimizer.update(model, grads)
 ```bash
 pytest tests/ -v                    # All tests
 pytest tests/test_gcn.py -v         # Model tests
+pytest tests/test_ensemble.py -v    # Ensemble tests
+pytest tests/test_evidential.py -v  # Evidential tests
 pytest tests/test_acquisition.py -v # Acquisition tests
+pytest tests/test_calibration.py -v # Calibration tests
 ```
 
 ## Dependencies

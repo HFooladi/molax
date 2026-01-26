@@ -1,0 +1,19 @@
+/* Custom styles for molax documentation */
+
+/* Primary color overrides for material theme */
+:root {
+  --md-primary-fg-color: #7c4dff;
+  --md-primary-fg-color--light: #b388ff;
+  --md-primary-fg-color--dark: #651fff;
+  --md-accent-fg-color: #536dfe;
+}
+
+/* Code block styling */
+.md-typeset code {
+  background-color: rgba(124, 77, 255, 0.1);
+}
+
+/* Navigation styling */
+.md-nav__link--active {
+  font-weight: bold;
+}

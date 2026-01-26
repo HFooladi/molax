@@ -1,62 +1,72 @@
-# Overview
+# molax
 
-`molax` is a python library designed for aiding in drug discovery by providing active learning capabilities. It helps researchers optimize their drug discovery process by intelligently selecting the most informative compounds for testing.
+High-performance molecular active learning with JAX.
+
+molax provides GPU-accelerated active learning for molecular property prediction, using [jraph](https://github.com/deepmind/jraph) for efficient graph batching (~400x speedup over naive implementations).
 
 ## Features
 
-- Active learning algorithms for molecular property prediction
-- Integration with popular molecular representation methods
-- Support for various molecular datasets
-- Flexible and extensible architecture
-- Easy-to-use API for drug discovery workflows
+- **Multiple uncertainty methods**: MC Dropout, Deep Ensembles, Evidential Deep Learning
+- **Calibration metrics**: Expected Calibration Error, calibration curves, reliability diagrams
+- **Acquisition functions**: Uncertainty sampling, diversity sampling, combined strategies
+- **GPU-accelerated**: Full JAX/Flax NNX integration with JIT compilation
 
 ## Installation
 
-You can install `molax` using pip:
-
-```bash
-pip install molax
-```
-
-For development installation:
+Using [uv](https://docs.astral.sh/uv/) (recommended):
 
 ```bash
 git clone https://github.com/HFooladi/molax.git
 cd molax
-pip install -e .
+uv pip install -e .
+```
+
+For development:
+
+```bash
+uv pip install -e .[dev]
 ```
 
 ## Quick Start
 
-Here's a simple example of how to use `molax`:
-
 ```python
-from molax import ActiveLearner
-from molax.datasets import MoleculeDataset
-from molax.models import PropertyPredictor
+from molax.utils.data import MolecularDataset
+from molax.models.gcn import GCNConfig, UncertaintyGCN
+from flax import nnx
+import jraph
+import jax.numpy as jnp
 
-# Initialize your dataset
-dataset = MoleculeDataset()
+# Load dataset
+dataset = MolecularDataset('datasets/esol.csv')
+train_data, test_data = dataset.split(test_size=0.2, seed=42)
 
-# Create a property predictor model
-model = PropertyPredictor()
+# Batch all data once (key for performance!)
+train_graphs = jraph.batch(train_data.graphs)
+train_labels = jnp.array(train_data.labels)
 
-# Initialize the active learner
-learner = ActiveLearner(model=model, dataset=dataset)
+# Create model with uncertainty quantification
+config = GCNConfig(
+    node_features=6,
+    hidden_features=[64, 64],
+    out_features=1,
+    dropout_rate=0.1,
+)
+model = UncertaintyGCN(config, rngs=nnx.Rngs(0))
 
-# Start the active learning process
-learner.run(n_iterations=10)
+# Get predictions with uncertainty
+mean, variance = model(train_graphs, training=True)
 ```
 
-## Documentation
+## Next Steps
 
-For detailed documentation, please visit our [documentation page](https://molax.readthedocs.io).
+- **[Core Concepts](concepts.md)**: Learn the batch-once-then-mask pattern that enables the 400x speedup
+- **[API Reference](api/models.md)**: Detailed documentation of all models and functions
+- **[Roadmap](roadmap.md)**: See what's coming next
 
 ## Contributing
 
-We welcome contributions! Please see our [contributing guidelines](CONTRIBUTING.md) for more information.
+We welcome contributions! Please see our [GitHub repository](https://github.com/HFooladi/molax) for more information.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
+This project is licensed under the MIT License.

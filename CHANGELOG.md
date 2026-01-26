@@ -17,6 +17,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] - 2025-01-26
+
+### Added
+- **Documentation Site** deployed to GitHub Pages
+  - Core concepts guide explaining batch-once-then-mask pattern
+  - Full API reference with mkdocstrings
+  - Installation and quick start guides
+
+- **Calibration Metrics** (`molax/metrics/`)
+  - `expected_calibration_error` for measuring uncertainty quality
+  - `compute_calibration_curve` for calibration analysis
+  - `negative_log_likelihood` metric
+  - `calibration_report` for comprehensive analysis
+  - Visualization tools: `plot_calibration_curve`, `plot_reliability_diagram`
+
+### Changed
+- **Migrated to uv** for package management
+  - CI/CD workflows now use `astral-sh/setup-uv@v5`
+  - Installation instructions updated to uv-first
+  - Faster dependency resolution and caching
+
+- Simplified README with links to documentation site
+
+---
+
 ## [0.2.0] - 2025-01-26
 
 ### Added
@@ -53,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/HFooladi/molax/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/HFooladi/molax/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/HFooladi/molax/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/HFooladi/molax/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/HFooladi/molax/releases/tag/v0.1.0
