@@ -27,8 +27,10 @@ jobs:
     - name: Set up Python
       run: uv python install 3.11
 
-    - name: Install dependencies
-      run: uv pip install -e .[docs] --system
+    - name: Create venv and install dependencies
+      run: |
+        uv venv --python 3.11
+        uv pip install -e .[docs]
 
     - name: Configure git
       run: |
@@ -36,4 +38,4 @@ jobs:
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
     - name: Deploy docs
-      run: mkdocs gh-deploy --force
+      run: uv run mkdocs gh-deploy --force

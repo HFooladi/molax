@@ -18,13 +18,15 @@ jobs:
     - name: Set up Python
       run: uv python install 3.11
 
-    - name: Install build tools
-      run: uv pip install build twine --system
+    - name: Create venv and install build tools
+      run: |
+        uv venv --python 3.11
+        uv pip install build twine
 
     - name: Build and publish
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
       run: |
-        python -m build
-        twine upload dist/*
+        uv run python -m build
+        uv run twine upload dist/*
