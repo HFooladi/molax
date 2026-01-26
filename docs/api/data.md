@@ -22,14 +22,6 @@ Functions for converting molecular representations to graph format.
 
 ::: molax.utils.data.batch_graphs
 
----
+### unbatch_graphs
 
-## Feature Extraction
-
-### get_atom_features
-
-::: molax.utils.data.get_atom_features
-
-### get_bond_features
-
-::: molax.utils.data.get_bond_features
+::: molax.utils.data.unbatch_graphs

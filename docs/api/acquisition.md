@@ -26,7 +26,7 @@ Functions that select diverse samples in feature space.
 
 ### diversity_sampling
 
-::: molax.acquisition.diversity.diversity_sampling
+::: molax.acquisition.uncertainty.diversity_sampling
 
 ---
 
