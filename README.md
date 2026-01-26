@@ -10,7 +10,7 @@
 
 High-performance molecular active learning with JAX. Built with [Flax NNX](https://flax.readthedocs.io/en/latest/nnx_basics.html) (the modern Flax API) and [jraph](https://github.com/deepmind/jraph) for efficient graph batching, achieving ~400x speedup over naive implementations.
 
-**[Documentation](https://hfooladi.github.io/molax/)** | **[API Reference](https://hfooladi.github.io/molax/api/models/)**
+**[Documentation](https://hfooladi.github.io/molax/)** | **[API Reference](https://hfooladi.github.io/molax/api/models.html)**
 
 ## Installation
 
@@ -45,7 +45,7 @@ model = UncertaintyGCN(config, rngs=nnx.Rngs(0))
 mean, variance = model(train_graphs, training=True)
 ```
 
-See the [Core Concepts](https://hfooladi.github.io/molax/concepts/) guide for the batch-once-then-mask pattern that enables the 400x speedup.
+See the [Core Concepts](https://hfooladi.github.io/molax/concepts.html) guide for the batch-once-then-mask pattern that enables the 400x speedup.
 
 ## Features
 
