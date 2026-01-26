@@ -190,6 +190,51 @@ class EvidentialGCN(nnx.Module):
 
         return gamma, total_var, epistemic_var
 
+    def extract_embeddings(
+        self, graph: jraph.GraphsTuple, training: bool = False
+    ) -> jnp.ndarray:
+        """Extract penultimate layer embeddings (graph-level).
+
+        Extracts the pooled graph representations before the evidential head,
+        which can be used for Core-Set selection, DPP sampling, or other
+        embedding-based acquisition strategies.
+
+        Args:
+            graph: Batched jraph.GraphsTuple
+            training: Whether in training mode (enables dropout)
+
+        Returns:
+            Embeddings of shape [n_graphs, hidden_dim] where hidden_dim
+            is the last element of hidden_features in the config.
+        """
+        # Apply GCN layers
+        for conv in self.conv_layers:
+            graph = conv(graph)
+            graph = graph._replace(nodes=nnx.relu(graph.nodes))
+            if training:
+                graph = graph._replace(nodes=self.dropout(graph.nodes))
+
+        # Global mean pooling per graph (stop before evidential head)
+        n_graphs = graph.n_node.shape[0]
+        graph_indices = jnp.repeat(
+            jnp.arange(n_graphs),
+            graph.n_node,
+            total_repeat_length=graph.nodes.shape[0],
+        )
+
+        # Sum pooling
+        pooled_sum = jraph.segment_sum(
+            graph.nodes,
+            graph_indices,
+            num_segments=n_graphs,
+        )
+
+        # Normalize by number of nodes
+        n_nodes_per_graph = graph.n_node.astype(jnp.float32)
+        n_nodes_per_graph = jnp.maximum(n_nodes_per_graph, 1.0)[:, None]
+
+        return pooled_sum / n_nodes_per_graph
+
 
 def evidential_loss(
     gamma: jnp.ndarray,

@@ -124,6 +124,35 @@ class DeepEnsemble(nnx.Module):
         mean, var = self.members[member_idx](graph, training=training)
         return mean, var
 
+    def extract_embeddings(
+        self, graph: jraph.GraphsTuple, training: bool = False
+    ) -> jnp.ndarray:
+        """Extract averaged embeddings from all ensemble members.
+
+        Each member extracts embeddings independently, and the results are
+        averaged to produce a single embedding per graph. This can be used
+        for Core-Set selection, DPP sampling, or other embedding-based
+        acquisition strategies.
+
+        Args:
+            graph: Batched jraph.GraphsTuple
+            training: Whether in training mode
+
+        Returns:
+            Averaged embeddings of shape [n_graphs, hidden_dim]
+        """
+        # Collect embeddings from all members
+        all_embeddings = []
+        for member in self.members:
+            embeddings = member.extract_embeddings(graph, training=training)
+            all_embeddings.append(embeddings)
+
+        # Stack: [n_members, n_graphs, hidden_dim]
+        all_embeddings = jnp.stack(all_embeddings, axis=0)
+
+        # Average across members
+        return jnp.mean(all_embeddings, axis=0)
+
 
 def create_ensemble_optimizers(
     ensemble: DeepEnsemble,
