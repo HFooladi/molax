@@ -17,6 +17,16 @@ from .evidential import (
     train_evidential_step,
 )
 from .gcn import MolecularGCN, UncertaintyGCN
+from .mpnn import (
+    MessageFunction,
+    MessagePassingLayer,
+    MPNNConfig,
+    UncertaintyMPNN,
+    create_mpnn_optimizer,
+    eval_mpnn_step,
+    get_mpnn_uncertainties,
+    train_mpnn_step,
+)
 
 __all__ = [
     "MolecularGCN",
@@ -35,4 +45,12 @@ __all__ = [
     "train_evidential_step",
     "eval_evidential_step",
     "get_evidential_uncertainties",
+    "MPNNConfig",
+    "MessageFunction",
+    "MessagePassingLayer",
+    "UncertaintyMPNN",
+    "create_mpnn_optimizer",
+    "train_mpnn_step",
+    "eval_mpnn_step",
+    "get_mpnn_uncertainties",
 ]
