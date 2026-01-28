@@ -23,7 +23,9 @@ from molax.utils.data import MolecularDataset
 # Configuration
 DATASET_PATH = Path(__file__).parent.parent / "datasets" / "esol.csv"
 N_EPOCHS = 100
-LEARNING_RATE = 5e-4  # Lower learning rate for stability
+LEARNING_RATE = 1e-3
+WEIGHT_DECAY = 1e-4  # L2 regularization
+MAX_GRAD_NORM = 1.0  # Gradient clipping
 
 print("=" * 60)
 print("MPNN Demo: Edge-Aware Molecular Property Prediction")
@@ -64,11 +66,18 @@ config = MPNNConfig(
     dropout_rate=0.1,
 )
 model = UncertaintyMPNN(config, rngs=nnx.Rngs(0))
-optimizer = create_mpnn_optimizer(model, learning_rate=LEARNING_RATE)
+optimizer = create_mpnn_optimizer(
+    model,
+    learning_rate=LEARNING_RATE,
+    weight_decay=WEIGHT_DECAY,
+    max_grad_norm=MAX_GRAD_NORM,
+)
 
 print(f"  Hidden layers: {config.hidden_features}")
 print(f"  Aggregation: {config.aggregation}")
 print(f"  Dropout rate: {config.dropout_rate}")
+print(f"  Weight decay: {WEIGHT_DECAY}")
+print(f"  Gradient clipping: {MAX_GRAD_NORM}")
 
 # Training loop
 print("\nTraining MPNN...")

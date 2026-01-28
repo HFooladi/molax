@@ -277,6 +277,9 @@ class UncertaintyMPNN(nnx.Module):
         mean = self.mean_head(pooled)
         log_var = self.var_head(pooled)
 
+        # Clip log_var to prevent variance explosion (variance in range [0.01, 100])
+        log_var = jnp.clip(log_var, -4.6, 4.6)
+
         # Return mean and variance (exp for positivity)
         return mean, jnp.exp(log_var)
 
@@ -327,20 +330,31 @@ class UncertaintyMPNN(nnx.Module):
 
 
 def create_mpnn_optimizer(
-    model: UncertaintyMPNN, learning_rate: float = 1e-3
+    model: UncertaintyMPNN,
+    learning_rate: float = 1e-3,
+    weight_decay: float = 1e-4,
+    max_grad_norm: float = 1.0,
 ) -> nnx.Optimizer:
-    """Create optimizer for MPNN training.
+    """Create optimizer for MPNN training with regularization.
 
     Args:
         model: The MPNN model to optimize
-        learning_rate: Learning rate
+        learning_rate: Learning rate (default: 1e-3)
+        weight_decay: L2 regularization weight (default: 1e-4)
+        max_grad_norm: Maximum gradient norm for clipping (default: 1.0)
 
     Returns:
         nnx.Optimizer instance
     """
     import optax
 
-    return nnx.Optimizer(model, optax.adam(learning_rate), wrt=nnx.Param)
+    # Chain: gradient clipping -> adam with weight decay
+    optimizer = optax.chain(
+        optax.clip_by_global_norm(max_grad_norm),
+        optax.adamw(learning_rate, weight_decay=weight_decay),
+    )
+
+    return nnx.Optimizer(model, optimizer, wrt=nnx.Param)
 
 
 @nnx.jit
