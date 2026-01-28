@@ -748,7 +748,7 @@
   <a href="#31-message-passing-neural-network-mpnn" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3.1 Message Passing Neural Network (MPNN)
+        3.1 Message Passing Neural Network (MPNN) ✅
       
     </span>
   </a>
@@ -1159,7 +1159,7 @@
   <a href="#31-message-passing-neural-network-mpnn" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3.1 Message Passing Neural Network (MPNN)
+        3.1 Message Passing Neural Network (MPNN) ✅
       
     </span>
   </a>
@@ -1770,55 +1770,35 @@
 <hr />
 <h2 id="phase-3-architecture-diversity">Phase 3: Architecture Diversity</h2>
 <p>Multiple architectures capture different inductive biases about molecular structure.</p>
-<h3 id="31-message-passing-neural-network-mpnn">3.1 Message Passing Neural Network (MPNN)</h3>
+<h3 id="31-message-passing-neural-network-mpnn">3.1 Message Passing Neural Network (MPNN) ✅</h3>
+<p><strong>Status:</strong> Implemented in <code>molax/models/mpnn.py</code></p>
 <p><strong>What:</strong> Generalized framework with explicit edge feature processing.</p>
 <p><strong>Why:</strong> Enables richer molecular representations using bond features.</p>
 <p><strong>Implementation:</strong></p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># molax/models/mpnn.py</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">molax.models.mpnn</span><span class="w"> </span><span class="kn">import</span> <span class="n">MPNNConfig</span><span class="p">,</span> <span class="n">UncertaintyMPNN</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="nd">@dataclass</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="k">class</span><span class="w"> </span><span class="nc">MPNNConfig</span><span class="p">:</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">node_features</span><span class="p">:</span> <span class="nb">int</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="n">edge_features</span><span class="p">:</span> <span class="nb">int</span>  <span class="c1"># NEW: bond features</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="n">hidden_features</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">64</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="n">message_passes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>    <span class="n">out_features</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="k">class</span><span class="w"> </span><span class="nc">MPNN</span><span class="p">(</span><span class="n">nnx</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">MPNNConfig</span><span class="p">,</span> <span class="n">rngs</span><span class="p">:</span> <span class="n">nnx</span><span class="o">.</span><span class="n">Rngs</span><span class="p">):</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">message_fn</span> <span class="o">=</span> <span class="n">nnx</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>            <span class="n">config</span><span class="o">.</span><span class="n">node_features</span> <span class="o">+</span> <span class="n">config</span><span class="o">.</span><span class="n">edge_features</span><span class="p">,</span>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>            <span class="n">config</span><span class="o">.</span><span class="n">hidden_features</span><span class="p">,</span>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>            <span class="n">rngs</span><span class="o">=</span><span class="n">rngs</span>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>        <span class="p">)</span>
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">update_fn</span> <span class="o">=</span> <span class="n">nnx</span><span class="o">.</span><span class="n">GRU</span><span class="p">(</span>
-</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>            <span class="n">config</span><span class="o">.</span><span class="n">hidden_features</span><span class="p">,</span>
-</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a>            <span class="n">config</span><span class="o">.</span><span class="n">hidden_features</span><span class="p">,</span>
-</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>            <span class="n">rngs</span><span class="o">=</span><span class="n">rngs</span>
-</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a>        <span class="p">)</span>
-</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>        <span class="c1"># ... readout layers</span>
-</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a>
-</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">graphs</span><span class="p">,</span> <span class="n">training</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
-</span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a>        <span class="n">nodes</span> <span class="o">=</span> <span class="n">graphs</span><span class="o">.</span><span class="n">nodes</span>
-</span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a>        <span class="n">edges</span> <span class="o">=</span> <span class="n">graphs</span><span class="o">.</span><span class="n">edges</span>  <span class="c1"># Bond features</span>
-</span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a>
-</span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a>        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">message_passes</span><span class="p">):</span>
-</span><span id="__span-7-31"><a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a>            <span class="c1"># Message: combine source node + edge features</span>
-</span><span id="__span-7-32"><a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a>            <span class="n">messages</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">message_fn</span><span class="p">(</span>
-</span><span id="__span-7-33"><a id="__codelineno-7-33" name="__codelineno-7-33" href="#__codelineno-7-33"></a>                <span class="n">jnp</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">nodes</span><span class="p">[</span><span class="n">graphs</span><span class="o">.</span><span class="n">senders</span><span class="p">],</span> <span class="n">edges</span><span class="p">],</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-</span><span id="__span-7-34"><a id="__codelineno-7-34" name="__codelineno-7-34" href="#__codelineno-7-34"></a>            <span class="p">)</span>
-</span><span id="__span-7-35"><a id="__codelineno-7-35" name="__codelineno-7-35" href="#__codelineno-7-35"></a>            <span class="c1"># Aggregate: sum messages per node</span>
-</span><span id="__span-7-36"><a id="__codelineno-7-36" name="__codelineno-7-36" href="#__codelineno-7-36"></a>            <span class="n">aggregated</span> <span class="o">=</span> <span class="n">jraph</span><span class="o">.</span><span class="n">segment_sum</span><span class="p">(</span><span class="n">messages</span><span class="p">,</span> <span class="n">graphs</span><span class="o">.</span><span class="n">receivers</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">nodes</span><span class="p">))</span>
-</span><span id="__span-7-37"><a id="__codelineno-7-37" name="__codelineno-7-37" href="#__codelineno-7-37"></a>            <span class="c1"># Update: GRU update</span>
-</span><span id="__span-7-38"><a id="__codelineno-7-38" name="__codelineno-7-38" href="#__codelineno-7-38"></a>            <span class="n">nodes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">update_fn</span><span class="p">(</span><span class="n">nodes</span><span class="p">,</span> <span class="n">aggregated</span><span class="p">)</span>
-</span><span id="__span-7-39"><a id="__codelineno-7-39" name="__codelineno-7-39" href="#__codelineno-7-39"></a>
-</span><span id="__span-7-40"><a id="__codelineno-7-40" name="__codelineno-7-40" href="#__codelineno-7-40"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">readout</span><span class="p">(</span><span class="n">nodes</span><span class="p">,</span> <span class="n">graphs</span><span class="p">)</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">config</span> <span class="o">=</span> <span class="n">MPNNConfig</span><span class="p">(</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">node_features</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">edge_features</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>  <span class="c1"># Bond type feature</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="n">hidden_features</span><span class="o">=</span><span class="p">[</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">],</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="n">out_features</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="n">aggregation</span><span class="o">=</span><span class="s2">&quot;sum&quot;</span><span class="p">,</span>  <span class="c1"># or &quot;mean&quot;, &quot;max&quot;</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>    <span class="n">dropout_rate</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="p">)</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="n">model</span> <span class="o">=</span> <span class="n">UncertaintyMPNN</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">rngs</span><span class="o">=</span><span class="n">nnx</span><span class="o">.</span><span class="n">Rngs</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="c1"># Same API as UncertaintyGCN</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="n">mean</span><span class="p">,</span> <span class="n">variance</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">batched_graphs</span><span class="p">,</span> <span class="n">training</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="c1"># Extract embeddings for Core-Set selection</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="n">embeddings</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">extract_embeddings</span><span class="p">(</span><span class="n">batched_graphs</span><span class="p">)</span>
 </span></code></pre></div>
 <p><strong>Acceptance Criteria:</strong>
-- [ ] MPNN with edge feature support
-- [ ] Configurable message/update functions
-- [ ] GRU and MLP update variants</p>
+- [x] MPNN with edge feature support
+- [x] Configurable aggregation (sum, mean, max)
+- [x] Same API as UncertaintyGCN for acquisition function compatibility
+- [x] MC Dropout uncertainty via <code>get_mpnn_uncertainties()</code></p>
 <hr />
 <h3 id="32-graph-attention-network-gat">3.2 Graph Attention Network (GAT)</h3>
 <p><strong>What:</strong> Learn edge importance dynamically via attention mechanism.</p>
