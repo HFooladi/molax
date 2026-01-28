@@ -1,6 +1,6 @@
 #!/bin/bash
 # Minimal environment setup script for molax
-# Usage: source env.sh
+# Usage: source setup.sh
 
 set -e
 

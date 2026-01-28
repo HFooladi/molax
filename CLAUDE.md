@@ -10,7 +10,7 @@ Molax is a high-performance JAX framework for molecular active learning. It uses
 
 ```bash
 # Setup (using uv)
-source env.sh
+source setup.sh
 
 # Test
 pytest tests/
