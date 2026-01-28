@@ -26,6 +26,7 @@ mkdocs serve
 # Run examples
 python examples/simple_active_learning.py
 python examples/active_learning_benchmark.py
+python examples/mpnn_demo.py
 python examples/ensemble_demo.py
 python examples/evidential_demo.py
 ```
@@ -65,7 +66,7 @@ SMILES string
 jraph.GraphsTuple (single molecule)
     ↓ jraph.batch()
 jraph.GraphsTuple (batched - all molecules as one graph)
-    ↓ UncertaintyGCN / DeepEnsemble / EvidentialGCN
+    ↓ UncertaintyGCN / UncertaintyMPNN / DeepEnsemble / EvidentialGCN
 (mean, variance) predictions
 ```
 
@@ -74,6 +75,7 @@ jraph.GraphsTuple (batched - all molecules as one graph)
 | File | Purpose |
 |------|---------|
 | `molax/models/gcn.py` | `GCNConfig`, `UncertaintyGCN`, `MolecularGCN`, `train_step`, `eval_step` |
+| `molax/models/mpnn.py` | `MPNNConfig`, `UncertaintyMPNN` for edge-aware message passing |
 | `molax/models/ensemble.py` | `EnsembleConfig`, `DeepEnsemble` for ensemble uncertainty |
 | `molax/models/evidential.py` | `EvidentialConfig`, `EvidentialGCN` for evidential uncertainty |
 | `molax/utils/data.py` | `MolecularDataset`, `smiles_to_jraph`, `batch_graphs` |
@@ -132,6 +134,25 @@ model = EvidentialGCN(config, rngs=nnx.Rngs(0))
 mean, aleatoric_var, epistemic_var = model(batched_graphs, training=False)
 ```
 
+### MPNN API
+
+```python
+from molax.models.mpnn import MPNNConfig, UncertaintyMPNN
+
+config = MPNNConfig(
+    node_features=6,
+    edge_features=1,  # Bond type feature
+    hidden_features=[64, 64],
+    out_features=1,
+    aggregation="sum",  # or "mean", "max"
+    dropout_rate=0.1,
+)
+model = UncertaintyMPNN(config, rngs=nnx.Rngs(0))
+
+# Same API as UncertaintyGCN - uses edge features in message passing
+mean, variance = model(batched_graphs, training=False)
+```
+
 ### Calibration Metrics
 
 ```python
@@ -163,7 +184,8 @@ optimizer.update(model, grads)
 
 ```bash
 pytest tests/ -v                    # All tests
-pytest tests/test_gcn.py -v         # Model tests
+pytest tests/test_gcn.py -v         # GCN model tests
+pytest tests/test_mpnn.py -v        # MPNN model tests
 pytest tests/test_ensemble.py -v    # Ensemble tests
 pytest tests/test_evidential.py -v  # Evidential tests
 pytest tests/test_acquisition.py -v # Acquisition tests

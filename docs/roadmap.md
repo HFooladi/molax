@@ -384,7 +384,9 @@ def expected_gradient_length(model, graphs, labels_placeholder):
 
 Multiple architectures capture different inductive biases about molecular structure.
 
-### 3.1 Message Passing Neural Network (MPNN)
+### 3.1 Message Passing Neural Network (MPNN) ✅
+
+**Status:** Implemented in `molax/models/mpnn.py`
 
 **What:** Generalized framework with explicit edge feature processing.
 
@@ -394,51 +396,30 @@ Multiple architectures capture different inductive biases about molecular struct
 
 ```python
 # molax/models/mpnn.py
-from dataclasses import dataclass
+from molax.models.mpnn import MPNNConfig, UncertaintyMPNN
 
-@dataclass
-class MPNNConfig:
-    node_features: int
-    edge_features: int  # NEW: bond features
-    hidden_features: int = 64
-    message_passes: int = 3
-    out_features: int = 1
+config = MPNNConfig(
+    node_features=6,
+    edge_features=1,  # Bond type feature
+    hidden_features=[64, 64],
+    out_features=1,
+    aggregation="sum",  # or "mean", "max"
+    dropout_rate=0.1,
+)
+model = UncertaintyMPNN(config, rngs=nnx.Rngs(0))
 
-class MPNN(nnx.Module):
-    def __init__(self, config: MPNNConfig, rngs: nnx.Rngs):
-        self.message_fn = nnx.Linear(
-            config.node_features + config.edge_features,
-            config.hidden_features,
-            rngs=rngs
-        )
-        self.update_fn = nnx.GRU(
-            config.hidden_features,
-            config.hidden_features,
-            rngs=rngs
-        )
-        # ... readout layers
+# Same API as UncertaintyGCN
+mean, variance = model(batched_graphs, training=False)
 
-    def __call__(self, graphs, training: bool = False):
-        nodes = graphs.nodes
-        edges = graphs.edges  # Bond features
-
-        for _ in range(self.config.message_passes):
-            # Message: combine source node + edge features
-            messages = self.message_fn(
-                jnp.concatenate([nodes[graphs.senders], edges], axis=-1)
-            )
-            # Aggregate: sum messages per node
-            aggregated = jraph.segment_sum(messages, graphs.receivers, len(nodes))
-            # Update: GRU update
-            nodes = self.update_fn(nodes, aggregated)
-
-        return self.readout(nodes, graphs)
+# Extract embeddings for Core-Set selection
+embeddings = model.extract_embeddings(batched_graphs)
 ```
 
 **Acceptance Criteria:**
-- [ ] MPNN with edge feature support
-- [ ] Configurable message/update functions
-- [ ] GRU and MLP update variants
+- [x] MPNN with edge feature support
+- [x] Configurable aggregation (sum, mean, max)
+- [x] Same API as UncertaintyGCN for acquisition function compatibility
+- [x] MC Dropout uncertainty via `get_mpnn_uncertainties()`
 
 ---
 

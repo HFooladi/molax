@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Message Passing Neural Network (MPNN)** (`molax/models/mpnn.py`)
+  - `UncertaintyMPNN` model that leverages edge features (bond information)
+  - `MPNNConfig` with configurable aggregation (sum, mean, max)
+  - `MessageFunction` and `MessagePassingLayer` components
+  - Training utilities: `train_mpnn_step`, `eval_mpnn_step`, `get_mpnn_uncertainties`
+  - Same API as `UncertaintyGCN` for drop-in replacement with acquisition functions
+  - Comprehensive tests (32 tests) and demo example
 
 ### Changed
 
