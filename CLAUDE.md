@@ -27,6 +27,7 @@ mkdocs serve
 python examples/simple_active_learning.py
 python examples/active_learning_benchmark.py
 python examples/mpnn_demo.py
+python examples/gat_demo.py
 python examples/ensemble_demo.py
 python examples/evidential_demo.py
 ```
@@ -66,7 +67,7 @@ SMILES string
 jraph.GraphsTuple (single molecule)
     ↓ jraph.batch()
 jraph.GraphsTuple (batched - all molecules as one graph)
-    ↓ UncertaintyGCN / UncertaintyMPNN / DeepEnsemble / EvidentialGCN
+    ↓ UncertaintyGCN / UncertaintyMPNN / UncertaintyGAT / DeepEnsemble / EvidentialGCN
 (mean, variance) predictions
 ```
 
@@ -76,6 +77,7 @@ jraph.GraphsTuple (batched - all molecules as one graph)
 |------|---------|
 | `molax/models/gcn.py` | `GCNConfig`, `UncertaintyGCN`, `MolecularGCN`, `train_step`, `eval_step` |
 | `molax/models/mpnn.py` | `MPNNConfig`, `UncertaintyMPNN` for edge-aware message passing |
+| `molax/models/gat.py` | `GATConfig`, `UncertaintyGAT` for attention-based message passing |
 | `molax/models/ensemble.py` | `EnsembleConfig`, `DeepEnsemble` for ensemble uncertainty |
 | `molax/models/evidential.py` | `EvidentialConfig`, `EvidentialGCN` for evidential uncertainty |
 | `molax/utils/data.py` | `MolecularDataset`, `smiles_to_jraph`, `batch_graphs` |
@@ -153,6 +155,27 @@ model = UncertaintyMPNN(config, rngs=nnx.Rngs(0))
 mean, variance = model(batched_graphs, training=False)
 ```
 
+### GAT API
+
+```python
+from molax.models.gat import GATConfig, UncertaintyGAT
+
+config = GATConfig(
+    node_features=6,
+    edge_features=1,  # Optional: include edge features in attention
+    hidden_features=[64, 64],
+    out_features=1,
+    n_heads=4,  # Multi-head attention
+    dropout_rate=0.1,
+    attention_dropout_rate=0.1,
+    negative_slope=0.2,  # LeakyReLU slope
+)
+model = UncertaintyGAT(config, rngs=nnx.Rngs(0))
+
+# Same API as UncertaintyGCN/UncertaintyMPNN - uses attention for aggregation
+mean, variance = model(batched_graphs, training=False)
+```
+
 ### Calibration Metrics
 
 ```python
@@ -186,6 +209,7 @@ optimizer.update(model, grads)
 pytest tests/ -v                    # All tests
 pytest tests/test_gcn.py -v         # GCN model tests
 pytest tests/test_mpnn.py -v        # MPNN model tests
+pytest tests/test_gat.py -v         # GAT model tests
 pytest tests/test_ensemble.py -v    # Ensemble tests
 pytest tests/test_evidential.py -v  # Evidential tests
 pytest tests/test_acquisition.py -v # Acquisition tests

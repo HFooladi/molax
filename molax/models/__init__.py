@@ -16,6 +16,16 @@ from .evidential import (
     get_evidential_uncertainties,
     train_evidential_step,
 )
+from .gat import (
+    GATAttention,
+    GATConfig,
+    GATLayer,
+    UncertaintyGAT,
+    create_gat_optimizer,
+    eval_gat_step,
+    get_gat_uncertainties,
+    train_gat_step,
+)
 from .gcn import MolecularGCN, UncertaintyGCN
 from .mpnn import (
     MessageFunction,
@@ -45,6 +55,14 @@ __all__ = [
     "train_evidential_step",
     "eval_evidential_step",
     "get_evidential_uncertainties",
+    "GATConfig",
+    "GATAttention",
+    "GATLayer",
+    "UncertaintyGAT",
+    "create_gat_optimizer",
+    "train_gat_step",
+    "eval_gat_step",
+    "get_gat_uncertainties",
     "MPNNConfig",
     "MessageFunction",
     "MessagePassingLayer",

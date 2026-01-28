@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Graph Attention Network (GAT)** (`molax/models/gat.py`)
+  - `UncertaintyGAT` model with multi-head attention for adaptive neighbor weighting
+  - `GATConfig` with configurable n_heads, edge_features, attention_dropout_rate
+  - `GATAttention` and `GATLayer` components
+  - Training utilities: `train_gat_step`, `eval_gat_step`, `get_gat_uncertainties`
+  - Same API as `UncertaintyGCN`/`UncertaintyMPNN` for drop-in replacement
+  - Optional edge feature incorporation in attention computation
+  - Comprehensive tests and demo example
+
 - **Message Passing Neural Network (MPNN)** (`molax/models/mpnn.py`)
   - `UncertaintyMPNN` model that leverages edge features (bond information)
   - `MPNNConfig` with configurable aggregation (sum, mean, max)

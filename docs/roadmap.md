@@ -423,7 +423,9 @@ embeddings = model.extract_embeddings(batched_graphs)
 
 ---
 
-### 3.2 Graph Attention Network (GAT)
+### 3.2 Graph Attention Network (GAT) ✅
+
+**Status:** Implemented in `molax/models/gat.py`
 
 **What:** Learn edge importance dynamically via attention mechanism.
 
@@ -433,35 +435,32 @@ embeddings = model.extract_embeddings(batched_graphs)
 
 ```python
 # molax/models/gat.py
+from molax.models.gat import GATConfig, UncertaintyGAT
 
-class GATLayer(nnx.Module):
-    def __init__(self, in_features, out_features, n_heads=4, rngs=None):
-        self.n_heads = n_heads
-        self.head_dim = out_features // n_heads
+config = GATConfig(
+    node_features=6,
+    edge_features=1,  # Optional: include edge features in attention
+    hidden_features=[64, 64],
+    out_features=1,
+    n_heads=4,
+    dropout_rate=0.1,
+    attention_dropout_rate=0.1,
+    negative_slope=0.2,
+)
+model = UncertaintyGAT(config, rngs=nnx.Rngs(0))
 
-        self.W = nnx.Linear(in_features, out_features, rngs=rngs)
-        self.attention = nnx.Linear(2 * self.head_dim, 1, rngs=rngs)
+# Same API as UncertaintyGCN/UncertaintyMPNN
+mean, variance = model(batched_graphs, training=False)
 
-    def __call__(self, graphs):
-        nodes = self.W(graphs.nodes)  # (N, out_features)
-        nodes = nodes.reshape(-1, self.n_heads, self.head_dim)
-
-        # Attention coefficients
-        src = nodes[graphs.senders]
-        dst = nodes[graphs.receivers]
-        e = self.attention(jnp.concatenate([src, dst], axis=-1))
-        alpha = jraph.segment_softmax(e, graphs.receivers, len(nodes))
-
-        # Aggregate with attention
-        messages = alpha * src
-        out = jraph.segment_sum(messages, graphs.receivers, len(nodes))
-        return out.reshape(-1, self.n_heads * self.head_dim)
+# Extract embeddings for Core-Set selection
+embeddings = model.extract_embeddings(batched_graphs)
 ```
 
 **Acceptance Criteria:**
-- [ ] Multi-head attention implementation
-- [ ] Edge feature incorporation option
-- [ ] Dropout on attention weights
+- [x] Multi-head attention implementation
+- [x] Edge feature incorporation option
+- [x] Dropout on attention weights
+- [x] Same API as UncertaintyGCN/UncertaintyMPNN for acquisition function compatibility
 
 ---
 
