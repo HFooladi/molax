@@ -28,6 +28,7 @@ python examples/simple_active_learning.py
 python examples/active_learning_benchmark.py
 python examples/mpnn_demo.py
 python examples/gat_demo.py
+python examples/graph_transformer_demo.py
 python examples/ensemble_demo.py
 python examples/evidential_demo.py
 ```
@@ -67,7 +68,7 @@ SMILES string
 jraph.GraphsTuple (single molecule)
     ↓ jraph.batch()
 jraph.GraphsTuple (batched - all molecules as one graph)
-    ↓ UncertaintyGCN / UncertaintyMPNN / UncertaintyGAT / DeepEnsemble / EvidentialGCN
+    ↓ UncertaintyGCN / UncertaintyMPNN / UncertaintyGAT / UncertaintyGraphTransformer / DeepEnsemble / EvidentialGCN
 (mean, variance) predictions
 ```
 
@@ -78,6 +79,7 @@ jraph.GraphsTuple (batched - all molecules as one graph)
 | `molax/models/gcn.py` | `GCNConfig`, `UncertaintyGCN`, `MolecularGCN`, `train_step`, `eval_step` |
 | `molax/models/mpnn.py` | `MPNNConfig`, `UncertaintyMPNN` for edge-aware message passing |
 | `molax/models/gat.py` | `GATConfig`, `UncertaintyGAT` for attention-based message passing |
+| `molax/models/graph_transformer.py` | `GraphTransformerConfig`, `UncertaintyGraphTransformer` for full self-attention with positional encodings |
 | `molax/models/ensemble.py` | `EnsembleConfig`, `DeepEnsemble` for ensemble uncertainty |
 | `molax/models/evidential.py` | `EvidentialConfig`, `EvidentialGCN` for evidential uncertainty |
 | `molax/utils/data.py` | `MolecularDataset`, `smiles_to_jraph`, `batch_graphs` |
@@ -176,6 +178,32 @@ model = UncertaintyGAT(config, rngs=nnx.Rngs(0))
 mean, variance = model(batched_graphs, training=False)
 ```
 
+### Graph Transformer API
+
+```python
+from molax.models.graph_transformer import GraphTransformerConfig, UncertaintyGraphTransformer
+
+config = GraphTransformerConfig(
+    node_features=6,
+    edge_features=1,  # Optional: edge features as attention bias
+    hidden_features=[64, 64],
+    out_features=1,
+    n_heads=4,  # Multi-head self-attention
+    ffn_ratio=4.0,  # FFN hidden dim = 4 * model dim
+    dropout_rate=0.1,
+    attention_dropout_rate=0.1,
+    pe_type="rwpe",  # Positional encoding: "rwpe", "laplacian", or "none"
+    pe_dim=16,  # Positional encoding dimension
+)
+model = UncertaintyGraphTransformer(config, rngs=nnx.Rngs(0))
+
+# Same API as UncertaintyGCN/UncertaintyMPNN/UncertaintyGAT
+mean, variance = model(batched_graphs, training=False)
+
+# Extract embeddings for Core-Set selection
+embeddings = model.extract_embeddings(batched_graphs)
+```
+
 ### Calibration Metrics
 
 ```python
@@ -206,14 +234,15 @@ optimizer.update(model, grads)
 ## Testing
 
 ```bash
-pytest tests/ -v                    # All tests
-pytest tests/test_gcn.py -v         # GCN model tests
-pytest tests/test_mpnn.py -v        # MPNN model tests
-pytest tests/test_gat.py -v         # GAT model tests
-pytest tests/test_ensemble.py -v    # Ensemble tests
-pytest tests/test_evidential.py -v  # Evidential tests
-pytest tests/test_acquisition.py -v # Acquisition tests
-pytest tests/test_calibration.py -v # Calibration tests
+pytest tests/ -v                              # All tests
+pytest tests/test_gcn.py -v                   # GCN model tests
+pytest tests/test_mpnn.py -v                  # MPNN model tests
+pytest tests/test_gat.py -v                   # GAT model tests
+pytest tests/test_graph_transformer.py -v    # Graph Transformer tests
+pytest tests/test_ensemble.py -v              # Ensemble tests
+pytest tests/test_evidential.py -v            # Evidential tests
+pytest tests/test_acquisition.py -v           # Acquisition tests
+pytest tests/test_calibration.py -v           # Calibration tests
 ```
 
 ## Dependencies

@@ -27,6 +27,18 @@ from .gat import (
     train_gat_step,
 )
 from .gcn import MolecularGCN, UncertaintyGCN
+from .graph_transformer import (
+    GraphTransformerAttention,
+    GraphTransformerConfig,
+    GraphTransformerLayer,
+    LaplacianPositionalEncoding,
+    RandomWalkPositionalEncoding,
+    UncertaintyGraphTransformer,
+    create_graph_transformer_optimizer,
+    eval_graph_transformer_step,
+    get_graph_transformer_uncertainties,
+    train_graph_transformer_step,
+)
 from .mpnn import (
     MessageFunction,
     MessagePassingLayer,
@@ -63,6 +75,16 @@ __all__ = [
     "train_gat_step",
     "eval_gat_step",
     "get_gat_uncertainties",
+    "GraphTransformerConfig",
+    "GraphTransformerAttention",
+    "GraphTransformerLayer",
+    "RandomWalkPositionalEncoding",
+    "LaplacianPositionalEncoding",
+    "UncertaintyGraphTransformer",
+    "create_graph_transformer_optimizer",
+    "train_graph_transformer_step",
+    "eval_graph_transformer_step",
+    "get_graph_transformer_uncertainties",
     "MPNNConfig",
     "MessageFunction",
     "MessagePassingLayer",

@@ -474,7 +474,9 @@ embeddings = model.extract_embeddings(batched_graphs)
 
 ---
 
-### 3.4 Graph Transformer
+### 3.4 Graph Transformer ✅
+
+**Status:** Implemented in `molax/models/graph_transformer.py`
 
 **What:** Full self-attention over molecular graphs with positional encodings.
 
@@ -484,34 +486,34 @@ embeddings = model.extract_embeddings(batched_graphs)
 
 ```python
 # molax/models/graph_transformer.py
+from molax.models.graph_transformer import GraphTransformerConfig, UncertaintyGraphTransformer
 
-class GraphTransformerLayer(nnx.Module):
-    def __init__(self, d_model, n_heads, rngs):
-        self.attention = nnx.MultiHeadAttention(
-            num_heads=n_heads,
-            in_features=d_model,
-            rngs=rngs
-        )
-        self.ff = nnx.Sequential([
-            nnx.Linear(d_model, 4 * d_model, rngs=rngs),
-            nnx.gelu,
-            nnx.Linear(4 * d_model, d_model, rngs=rngs),
-        ])
-        self.norm1 = nnx.LayerNorm(d_model, rngs=rngs)
-        self.norm2 = nnx.LayerNorm(d_model, rngs=rngs)
+config = GraphTransformerConfig(
+    node_features=6,
+    edge_features=1,  # Optional: include edge features as attention bias
+    hidden_features=[64, 64],
+    out_features=1,
+    n_heads=4,
+    ffn_ratio=4.0,  # FFN hidden dim = 4 * model dim
+    dropout_rate=0.1,
+    attention_dropout_rate=0.1,
+    pe_type="rwpe",  # Random Walk PE (or "laplacian", "none")
+    pe_dim=16,
+)
+model = UncertaintyGraphTransformer(config, rngs=nnx.Rngs(0))
 
-    def __call__(self, nodes, attention_mask):
-        # Self-attention with graph structure mask
-        attn_out = self.attention(nodes, nodes, mask=attention_mask)
-        nodes = self.norm1(nodes + attn_out)
-        nodes = self.norm2(nodes + self.ff(nodes))
-        return nodes
+# Same API as UncertaintyGCN/UncertaintyMPNN/UncertaintyGAT
+mean, variance = model(batched_graphs, training=False)
+
+# Extract embeddings for Core-Set selection
+embeddings = model.extract_embeddings(batched_graphs)
 ```
 
 **Acceptance Criteria:**
-- [ ] Graph-aware attention masking
-- [ ] Positional encodings (Laplacian eigenvectors, random walk)
-- [ ] Configurable depth and width
+- [x] Graph-aware attention masking
+- [x] Positional encodings (Laplacian eigenvectors, random walk)
+- [x] Configurable depth and width
+- [x] Same API as UncertaintyGCN/UncertaintyMPNN/UncertaintyGAT for acquisition function compatibility
 
 ---
 
