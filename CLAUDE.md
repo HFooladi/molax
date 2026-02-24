@@ -29,8 +29,11 @@ python examples/active_learning_benchmark.py
 python examples/mpnn_demo.py
 python examples/gat_demo.py
 python examples/graph_transformer_demo.py
-python examples/ensemble_demo.py
-python examples/evidential_demo.py
+python examples/ensemble_active_learning.py
+python examples/evidential_active_learning.py
+python examples/acquisition_strategies_demo.py
+python examples/calibration_comparison.py
+python examples/uncertainty_gcn_demo.py
 ```
 
 ## Architecture
@@ -83,141 +86,66 @@ jraph.GraphsTuple (batched - all molecules as one graph)
 | `molax/models/ensemble.py` | `EnsembleConfig`, `DeepEnsemble` for ensemble uncertainty |
 | `molax/models/evidential.py` | `EvidentialConfig`, `EvidentialGCN` for evidential uncertainty |
 | `molax/utils/data.py` | `MolecularDataset`, `smiles_to_jraph`, `batch_graphs` |
-| `molax/acquisition/uncertainty.py` | `uncertainty_sampling`, `ensemble_uncertainty_sampling`, `evidential_uncertainty_sampling` |
-| `molax/acquisition/diversity.py` | `diversity_sampling` |
-| `molax/metrics/calibration.py` | `expected_calibration_error`, `calibration_report` |
-| `molax/metrics/visualization.py` | `plot_calibration_curve`, `plot_reliability_diagram` |
+| `molax/acquisition/uncertainty.py` | `uncertainty_sampling`, `ensemble_uncertainty_sampling`, `evidential_uncertainty_sampling`, `diversity_sampling`, `combined_*` strategies |
+| `molax/acquisition/bald.py` | `bald_sampling`, `ensemble_bald_sampling`, `evidential_bald_sampling` (mutual information) |
+| `molax/acquisition/batch_aware.py` | `batch_bald_sampling`, `dpp_sampling`, `combined_batch_acquisition` |
+| `molax/acquisition/coreset.py` | `coreset_sampling`, `coreset_sampling_with_scores` (K-center greedy) |
+| `molax/acquisition/expected_change.py` | `egl_sampling`, `egl_acquisition` (expected gradient length) |
+| `molax/metrics/calibration.py` | `expected_calibration_error`, `evaluate_calibration`, `TemperatureScaling`, `negative_log_likelihood`, `sharpness` |
+| `molax/metrics/visualization.py` | `plot_reliability_diagram`, `plot_calibration_comparison`, `plot_uncertainty_vs_error`, `create_calibration_report` |
 
 ### Model API
 
-```python
-from molax.models.gcn import GCNConfig, UncertaintyGCN
+All models share a common pattern: `Config` → `Model(config, rngs)` → `model(graphs, training)` → `(mean, variance)`.
 
-config = GCNConfig(
-    node_features=6,        # Atom features
-    hidden_features=[64, 64],  # GCN layers
-    out_features=1,         # Output dim
-    dropout_rate=0.1,
-)
+| Model | Config | Extra Config Params | Output |
+|-------|--------|-------------------|--------|
+| `UncertaintyGCN` | `GCNConfig` | — | `(mean, var)` |
+| `UncertaintyMPNN` | `MPNNConfig` | `edge_features`, `aggregation` | `(mean, var)` |
+| `UncertaintyGAT` | `GATConfig` | `n_heads`, `attention_dropout_rate`, `negative_slope` | `(mean, var)` |
+| `UncertaintyGraphTransformer` | `GraphTransformerConfig` | `n_heads`, `ffn_ratio`, `pe_type`, `pe_dim` | `(mean, var)` |
+| `DeepEnsemble` | `EnsembleConfig` | `n_members` | `(mean, epistemic_var, aleatoric_var)` |
+| `EvidentialGCN` | `EvidentialConfig` | — | `(mean, aleatoric_var, epistemic_var)` |
+
+All configs share: `node_features`, `hidden_features`, `out_features`, `dropout_rate`. Edge-aware models (MPNN, GAT, GraphTransformer) also take `edge_features`.
+
+```python
+# Example: any model follows this pattern
+from molax.models import GCNConfig, UncertaintyGCN
+
+config = GCNConfig(node_features=6, hidden_features=[64, 64], out_features=1, dropout_rate=0.1)
 model = UncertaintyGCN(config, rngs=nnx.Rngs(0))
-
-# Forward pass
 mean, variance = model(batched_graphs, training=True)
-```
 
-### Ensemble API
-
-```python
-from molax.models.ensemble import EnsembleConfig, DeepEnsemble
-
-config = EnsembleConfig(
-    node_features=6,
-    hidden_features=[64, 64],
-    out_features=1,
-    n_members=5,
-)
-ensemble = DeepEnsemble(config, rngs=nnx.Rngs(0))
-
-# Returns separate epistemic and aleatoric uncertainty
+# Ensemble returns 3 values
+from molax.models import EnsembleConfig, DeepEnsemble
+ensemble = DeepEnsemble(EnsembleConfig(node_features=6, hidden_features=[64, 64], out_features=1, n_members=5), rngs=nnx.Rngs(0))
 mean, epistemic_var, aleatoric_var = ensemble(batched_graphs, training=False)
-```
 
-### Evidential API
-
-```python
-from molax.models.evidential import EvidentialConfig, EvidentialGCN
-
-config = EvidentialConfig(
-    node_features=6,
-    hidden_features=[64, 64],
-    out_features=1,
-)
-model = EvidentialGCN(config, rngs=nnx.Rngs(0))
-
-# Single forward pass for both uncertainties
-mean, aleatoric_var, epistemic_var = model(batched_graphs, training=False)
-```
-
-### MPNN API
-
-```python
-from molax.models.mpnn import MPNNConfig, UncertaintyMPNN
-
-config = MPNNConfig(
-    node_features=6,
-    edge_features=1,  # Bond type feature
-    hidden_features=[64, 64],
-    out_features=1,
-    aggregation="sum",  # or "mean", "max"
-    dropout_rate=0.1,
-)
-model = UncertaintyMPNN(config, rngs=nnx.Rngs(0))
-
-# Same API as UncertaintyGCN - uses edge features in message passing
-mean, variance = model(batched_graphs, training=False)
-```
-
-### GAT API
-
-```python
-from molax.models.gat import GATConfig, UncertaintyGAT
-
-config = GATConfig(
-    node_features=6,
-    edge_features=1,  # Optional: include edge features in attention
-    hidden_features=[64, 64],
-    out_features=1,
-    n_heads=4,  # Multi-head attention
-    dropout_rate=0.1,
-    attention_dropout_rate=0.1,
-    negative_slope=0.2,  # LeakyReLU slope
-)
-model = UncertaintyGAT(config, rngs=nnx.Rngs(0))
-
-# Same API as UncertaintyGCN/UncertaintyMPNN - uses attention for aggregation
-mean, variance = model(batched_graphs, training=False)
-```
-
-### Graph Transformer API
-
-```python
-from molax.models.graph_transformer import GraphTransformerConfig, UncertaintyGraphTransformer
-
-config = GraphTransformerConfig(
-    node_features=6,
-    edge_features=1,  # Optional: edge features as attention bias
-    hidden_features=[64, 64],
-    out_features=1,
-    n_heads=4,  # Multi-head self-attention
-    ffn_ratio=4.0,  # FFN hidden dim = 4 * model dim
-    dropout_rate=0.1,
-    attention_dropout_rate=0.1,
-    pe_type="rwpe",  # Positional encoding: "rwpe", "laplacian", or "none"
-    pe_dim=16,  # Positional encoding dimension
-)
-model = UncertaintyGraphTransformer(config, rngs=nnx.Rngs(0))
-
-# Same API as UncertaintyGCN/UncertaintyMPNN/UncertaintyGAT
-mean, variance = model(batched_graphs, training=False)
-
-# Extract embeddings for Core-Set selection
+# GraphTransformer supports embedding extraction for CoreSet
 embeddings = model.extract_embeddings(batched_graphs)
 ```
 
 ### Calibration Metrics
 
 ```python
-from molax.metrics import expected_calibration_error, calibration_report
-from molax.metrics.visualization import plot_calibration_curve
+from molax.metrics import expected_calibration_error, evaluate_calibration, TemperatureScaling
+from molax.metrics import plot_reliability_diagram, create_calibration_report
 
 # Compute ECE
 ece = expected_calibration_error(predictions, variances, targets)
 
-# Generate full report
-report = calibration_report(predictions, variances, targets)
+# Full evaluation (returns dict with ece, nll, sharpness, mse, rmse)
+metrics = evaluate_calibration(predictions, variances, targets)
+
+# Post-hoc calibration
+scaler = TemperatureScaling()
+scaler.fit(val_mean, val_var, val_targets)
+calibrated_var = scaler.transform(test_var)
 
 # Visualize
-fig = plot_calibration_curve(predictions, variances, targets)
+plot_reliability_diagram(predictions, variances, targets)
+create_calibration_report(predictions, variances, targets)  # Multi-plot report
 ```
 
 ### Optimizer Pattern (Flax 0.11+)
@@ -241,7 +169,11 @@ pytest tests/test_gat.py -v                   # GAT model tests
 pytest tests/test_graph_transformer.py -v    # Graph Transformer tests
 pytest tests/test_ensemble.py -v              # Ensemble tests
 pytest tests/test_evidential.py -v            # Evidential tests
-pytest tests/test_acquisition.py -v           # Acquisition tests
+pytest tests/test_acquisition.py -v           # Acquisition tests (uncertainty/diversity)
+pytest tests/test_bald.py -v                  # BALD acquisition tests
+pytest tests/test_batch_aware.py -v           # BatchBALD/DPP tests
+pytest tests/test_coreset.py -v               # CoreSet acquisition tests
+pytest tests/test_expected_change.py -v       # Expected gradient length tests
 pytest tests/test_calibration.py -v           # Calibration tests
 ```
 
@@ -257,21 +189,21 @@ Download: `python scripts/download_esol.py`
 
 ## GitHub CLI
 
-Use `gh_cli` command to interact with GitHub:
+Use `gh` command to interact with GitHub:
 
 ```bash
 # Check workflow runs
-gh_cli run list
+gh run list
 
 # View specific run
-gh_cli run view <run-id>
+gh run view <run-id>
 
 # Watch a run in progress
-gh_cli run watch <run-id>
+gh run watch <run-id>
 
 # View workflow logs
-gh_cli run view <run-id> --log
+gh run view <run-id> --log
 
 # Trigger workflow manually
-gh_cli workflow run ci.yml
+gh workflow run ci.yml
 ```
