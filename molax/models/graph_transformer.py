@@ -6,7 +6,7 @@ state-of-the-art performance on molecular property prediction.
 """
 
 from dataclasses import dataclass
-from typing import Literal, Optional, Sequence, Tuple, Union
+from typing import Literal, Sequence, Tuple
 
 import flax.nnx as nnx
 import jax
@@ -434,9 +434,7 @@ class UncertaintyGraphTransformer(nnx.Module):
         self.input_proj = nnx.Linear(input_dim, hidden_dim, rngs=rngs)
 
         # Positional encoding
-        self.pe: Optional[
-            Union[RandomWalkPositionalEncoding, LaplacianPositionalEncoding]
-        ] = None
+        self.pe: RandomWalkPositionalEncoding | LaplacianPositionalEncoding | None
         if config.pe_type == "rwpe":
             self.pe = RandomWalkPositionalEncoding(
                 pe_dim=config.pe_dim,
@@ -449,6 +447,8 @@ class UncertaintyGraphTransformer(nnx.Module):
                 hidden_dim=hidden_dim,
                 rngs=rngs,
             )
+        else:
+            self.pe = None
 
         # Build transformer layers
         layers = []
