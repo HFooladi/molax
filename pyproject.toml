@@ -20,7 +20,7 @@ name = "molax"
 dynamic = ["version"]
 description = "Molecular active learning with JAX"
 authors = [
-    {name = "Hossein Fooladi", email = "hossein.fooladi@gmail.com"},
+    {name = "Hosein Fooladi", email = "fooladi.hosein@gmail.com"},
 ]
 dependencies = [
     "jax>=0.4.20",
