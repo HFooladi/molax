@@ -26,7 +26,7 @@ from .gat import (
     get_gat_uncertainties,
     train_gat_step,
 )
-from .gcn import MolecularGCN, UncertaintyGCN
+from .gcn import GCNConfig, MolecularGCN, UncertaintyGCN
 from .graph_transformer import (
     GraphTransformerAttention,
     GraphTransformerConfig,
@@ -51,6 +51,7 @@ from .mpnn import (
 )
 
 __all__ = [
+    "GCNConfig",
     "MolecularGCN",
     "UncertaintyGCN",
     "DeepEnsemble",
