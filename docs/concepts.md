@@ -212,19 +212,27 @@ mean, aleatoric_var, epistemic_var = model(graphs, training=False)
 Well-calibrated uncertainty means the model's confidence matches its accuracy. molax provides tools to measure and visualize calibration:
 
 ```python
-from molax.metrics import expected_calibration_error, calibration_report
-from molax.metrics.visualization import plot_calibration_curve
+from molax.metrics import (
+    expected_calibration_error,
+    evaluate_calibration,
+    create_calibration_report,
+    plot_reliability_diagram,
+)
 
-# Compute ECE
+# Single ECE number
 ece = expected_calibration_error(predictions, variances, targets)
 print(f"Expected Calibration Error: {ece:.4f}")
 
-# Generate full report
-report = calibration_report(predictions, variances, targets)
+# Full metric dict (nll, ece, rmse, sharpness, mean_z_score)
+metrics = evaluate_calibration(predictions, variances, targets)
 
-# Visualize
-fig = plot_calibration_curve(predictions, variances, targets)
-fig.savefig("calibration.png")
+# Reliability diagram (returns a matplotlib Axes)
+ax = plot_reliability_diagram(predictions, variances, targets)
+ax.figure.savefig("reliability.png", dpi=150, bbox_inches="tight")
+
+# Multi-plot calibration report (returns a matplotlib Figure)
+fig = create_calibration_report(predictions, variances, targets, model_name="GCN")
+fig.savefig("calibration_report.png", dpi=150, bbox_inches="tight")
 ```
 
 A perfectly calibrated model has ECE = 0. In practice, ECE < 0.05 is considered well-calibrated.

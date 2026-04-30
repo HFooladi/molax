@@ -860,4 +860,4 @@ We welcome contributions! Priority areas:
 2. **Calibration tools** - Metrics and visualization
 3. **Acquisition functions** - BALD, batch-aware selection
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
+Open an issue or PR on the [GitHub repository](https://github.com/HFooladi/molax) to get started.
