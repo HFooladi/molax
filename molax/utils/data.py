@@ -9,21 +9,29 @@ import numpy as np
 import pandas as pd
 from rdkit import Chem
 
+from .featurizers import DEFAULT_FEATURIZER, get_atom_featurizer
 from .logger import logger
 
 
-def smiles_to_jraph(smiles: str) -> jraph.GraphsTuple:
+def smiles_to_jraph(
+    smiles: str, features: str = DEFAULT_FEATURIZER
+) -> jraph.GraphsTuple:
     """Convert SMILES string to jraph GraphsTuple format.
 
     Args:
         smiles: SMILES string representing the molecule
+        features: Atom featurizer name. ``"basic"`` (default) gives the six raw
+            descriptors; ``"rich"`` gives a 29-dimensional one-hot encoding that
+            trains substantially better. See :mod:`molax.utils.featurizers`.
 
     Returns:
         jraph.GraphsTuple containing the molecular graph
 
     Raises:
-        ValueError: If the SMILES string is invalid
+        ValueError: If the SMILES string is invalid or the featurizer is unknown
     """
+    featurizer = get_atom_featurizer(features)
+
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         raise ValueError(f"Invalid SMILES string: {smiles}")
@@ -31,19 +39,7 @@ def smiles_to_jraph(smiles: str) -> jraph.GraphsTuple:
     atoms = mol.GetAtoms()
     n_atoms = len(atoms)
 
-    # Node features: [atomic_num, degree, formal_charge, chiral_tag,
-    #                 hybridization, aromacity]
-    node_features = []
-    for atom in atoms:
-        features = [
-            float(atom.GetAtomicNum()),
-            float(atom.GetDegree()),
-            float(atom.GetFormalCharge()),
-            float(atom.GetChiralTag()),
-            float(atom.GetHybridization()),
-            float(atom.GetIsAromatic()),
-        ]
-        node_features.append(features)
+    node_features = [featurizer(atom) for atom in atoms]
 
     # Edge features: build sender/receiver lists from bonds
     senders = []
@@ -149,6 +145,7 @@ class MolecularDataset:
         data: Union[pd.DataFrame, str, Path],
         smiles_col: str = "smiles",
         label_col: str = "property",
+        features: str = DEFAULT_FEATURIZER,
     ):
         """Initialize dataset from DataFrame or CSV file.
 
@@ -156,8 +153,12 @@ class MolecularDataset:
             data: DataFrame or path to CSV file
             smiles_col: Column name for SMILES strings
             label_col: Column name for property labels
+            features: Atom featurizer name, see :mod:`molax.utils.featurizers`
         """
         logger.info("Initializing MolecularDataset")
+
+        featurizer = get_atom_featurizer(features)
+        self.features = features
 
         if isinstance(data, (str, Path)):
             logger.info(f"Loading data from file: {data}")
@@ -177,14 +178,14 @@ class MolecularDataset:
 
         for idx, row in df.iterrows():
             try:
-                graph = smiles_to_jraph(row[smiles_col])
+                graph = smiles_to_jraph(row[smiles_col], features=features)
                 self.graphs.append(graph)
                 self.labels.append(float(row[label_col]))
             except ValueError as e:
                 logger.warning(f"Skipping invalid SMILES at index {idx}: {e}")
 
         self.labels = jnp.array(self.labels, dtype=jnp.float32)
-        self.n_node_features = self.graphs[0].nodes.shape[1] if self.graphs else 6
+        self.n_node_features = featurizer.dim
 
         logger.info(f"Loaded {len(self.graphs)} molecules")
 
@@ -267,11 +268,13 @@ class MolecularDataset:
         train_dataset.graphs = [self.graphs[i] for i in train_idx]
         train_dataset.labels = self.labels[train_idx]  # type: ignore[assignment]
         train_dataset.n_node_features = self.n_node_features
+        train_dataset.features = self.features
 
         test_dataset = MolecularDataset.__new__(MolecularDataset)
         test_dataset.graphs = [self.graphs[i] for i in test_idx]
         test_dataset.labels = self.labels[test_idx]  # type: ignore[assignment]
         test_dataset.n_node_features = self.n_node_features
+        test_dataset.features = self.features
 
         logger.info(f"Split: {len(train_dataset)} train, {len(test_dataset)} test")
         return train_dataset, test_dataset

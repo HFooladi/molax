@@ -32,13 +32,16 @@ from molax.models.gcn import GCNConfig, UncertaintyGCN
 from flax import nnx
 import jraph
 
-# Load and batch data
-dataset = MolecularDataset('datasets/esol.csv')
+# Load and batch data. 'rich' gives 29-dim one-hot atom features and trains
+# far better than the legacy 6-dim default (ESOL test RMSE 0.92 vs 1.33).
+dataset = MolecularDataset('datasets/esol.csv', features='rich')
 train_data, test_data = dataset.split(test_size=0.2, seed=42)
 train_graphs = jraph.batch(train_data.graphs)
 
 # Create model with uncertainty
-config = GCNConfig(node_features=6, hidden_features=[64, 64], out_features=1)
+config = GCNConfig(
+    node_features=dataset.n_node_features, hidden_features=[64, 64], out_features=1
+)
 model = UncertaintyGCN(config, rngs=nnx.Rngs(0))
 
 # Get predictions with uncertainty
@@ -53,6 +56,22 @@ See the [Core Concepts](https://hfooladi.github.io/molax/concepts.html) guide fo
 - **Calibration metrics**: ECE, calibration curves, reliability diagrams
 - **Acquisition functions**: Uncertainty sampling, diversity sampling, combined strategies
 - **GPU-accelerated**: Full JAX/Flax NNX integration with JIT compilation
+
+## Drug discovery case study
+
+`examples/bace_lead_optimization.py` simulates Design-Make-Test-Analyze rounds
+against BACE-1 (beta-secretase 1, an Alzheimer's target) under a fixed assay
+budget, using a Bemis-Murcko scaffold split.
+
+```bash
+python scripts/download_bace.py
+python examples/bace_lead_optimization.py
+```
+
+It scores acquisition strategies on **hit enrichment** — how many of the most
+potent compounds a campaign recovers per assay — rather than on global RMSE,
+because those are different objectives and they do not agree. See the
+[case study writeup](https://hfooladi.github.io/molax/case_study_bace.html).
 
 ## Citation
 

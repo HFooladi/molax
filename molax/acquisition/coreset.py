@@ -20,6 +20,61 @@ from molax.models.gcn import UncertaintyGCN
 from molax.utils.data import batch_graphs
 
 
+def coreset_from_embeddings(
+    embeddings: jnp.ndarray,
+    pool_mask: jnp.ndarray,
+    n_select: int,
+) -> List[int]:
+    """K-center greedy over a precomputed embedding matrix.
+
+    This is the index-based form of :func:`coreset_sampling`. It is the right
+    entry point when all molecules already live in one pre-batched
+    ``GraphsTuple`` and active learning is driven by a boolean mask, because it
+    avoids re-batching the pool every round (re-batching changes array shapes
+    and triggers JIT recompilation, which is what the fixed-batch pattern
+    exists to avoid).
+
+    Args:
+        embeddings: Embeddings for every molecule, shape [n_total, hidden_dim]
+        pool_mask: Boolean mask, True for unlabeled candidates. Labeled points
+            are treated as already-covered centers.
+        n_select: Number of points to select
+
+    Returns:
+        List of selected indices into the full ``embeddings`` array (not into
+        the pool subset), so they can be applied to the mask directly.
+    """
+    pool_indices = [int(i) for i in jnp.where(pool_mask)[0]]
+    if not pool_indices:
+        return []
+
+    n_select = min(n_select, len(pool_indices))
+
+    # Distance from every point to the nearest already-labeled point.
+    labeled_mask = ~pool_mask
+    if bool(jnp.any(labeled_mask)):
+        labeled_embeddings = embeddings[labeled_mask]
+        diff = embeddings[:, None, :] - labeled_embeddings[None, :, :]
+        min_distances = jnp.min(jnp.linalg.norm(diff, axis=2), axis=1)
+    else:
+        min_distances = jnp.full(embeddings.shape[0], jnp.inf)
+
+    # Never pick an already-labeled point.
+    min_distances = jnp.where(pool_mask, min_distances, -jnp.inf)
+
+    selected: List[int] = []
+    for _ in range(n_select):
+        best_idx = int(jnp.argmax(min_distances))
+        selected.append(best_idx)
+
+        # Cover the newly selected center, and take it out of contention.
+        new_dists = jnp.linalg.norm(embeddings - embeddings[best_idx], axis=1)
+        min_distances = jnp.minimum(min_distances, new_dists)
+        min_distances = min_distances.at[best_idx].set(-jnp.inf)
+
+    return selected
+
+
 def coreset_sampling(
     model: Union[UncertaintyGCN, DeepEnsemble, EvidentialGCN],
     pool_graphs: List[jraph.GraphsTuple],
@@ -53,54 +108,25 @@ def coreset_sampling(
         return []
 
     n_pool = len(pool_graphs)
-    n_select = min(n_select, n_pool)
+    n_labeled = len(labeled_graphs)
 
-    # Extract embeddings for pool graphs
+    # Embed pool and labeled molecules into one array so the greedy selection
+    # can run over a single index space. Pool points come first, so returned
+    # indices are already indices into pool_graphs.
     pool_batched = batch_graphs(pool_graphs)
-    pool_embeddings = model.extract_embeddings(pool_batched, training=False)
-    # Only keep actual pool embeddings (exclude padding)
-    pool_embeddings = pool_embeddings[:n_pool]
+    pool_embeddings = model.extract_embeddings(pool_batched, training=False)[:n_pool]
 
-    # Extract embeddings for labeled graphs if any
     if labeled_graphs:
         labeled_batched = batch_graphs(labeled_graphs)
         labeled_embeddings = model.extract_embeddings(labeled_batched, training=False)
-        # Only keep actual labeled embeddings (exclude padding)
-        labeled_embeddings = labeled_embeddings[: len(labeled_graphs)]
+        labeled_embeddings = labeled_embeddings[:n_labeled]
+        embeddings = jnp.concatenate([pool_embeddings, labeled_embeddings], axis=0)
     else:
-        labeled_embeddings = None
+        embeddings = pool_embeddings
 
-    # Initialize minimum distances to infinity
-    min_distances = jnp.full(n_pool, jnp.inf)
+    pool_mask = jnp.arange(embeddings.shape[0]) < n_pool
 
-    # Compute initial min-distances to labeled set
-    if labeled_embeddings is not None:
-        for i in range(len(labeled_graphs)):
-            # Euclidean distance from each pool point to this labeled point
-            dists = jnp.linalg.norm(
-                pool_embeddings - labeled_embeddings[i : i + 1], axis=1
-            )
-            min_distances = jnp.minimum(min_distances, dists)
-
-    selected: List[int] = []
-
-    for _ in range(n_select):
-        # Select the point with maximum min-distance
-        # Mask out already selected points by setting their distance to -inf
-        if selected:
-            masked_distances = min_distances.at[jnp.array(selected)].set(-jnp.inf)
-        else:
-            masked_distances = min_distances
-        best_idx = int(jnp.argmax(masked_distances))
-        selected.append(best_idx)
-
-        # Update min-distances with the newly selected point
-        new_dists = jnp.linalg.norm(
-            pool_embeddings - pool_embeddings[best_idx : best_idx + 1], axis=1
-        )
-        min_distances = jnp.minimum(min_distances, new_dists)
-
-    return selected
+    return coreset_from_embeddings(embeddings, pool_mask, n_select)
 
 
 def coreset_sampling_with_scores(

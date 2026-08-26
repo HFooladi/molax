@@ -51,12 +51,15 @@ class DeepEnsemble(nnx.Module):
         self.config = config
         self.n_members = config.n_members
 
-        # Create N independent models with different random seeds
-        # Each member gets a unique seed for independent initialization
+        # Create N independent models, each seeded from the caller's rngs.
+        # Drawing a fresh key per member keeps members independent of each
+        # other while still making the whole ensemble a function of `rngs` --
+        # two ensembles built from different seeds differ, and two built from
+        # the same seed are identical.
         self.members = nnx.List(
             [
-                UncertaintyGCN(config.base_config, rngs=nnx.Rngs(i))
-                for i in range(config.n_members)
+                UncertaintyGCN(config.base_config, rngs=nnx.Rngs(rngs.params()))
+                for _ in range(config.n_members)
             ]
         )
 

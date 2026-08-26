@@ -15,6 +15,7 @@ strict: false
 nav:
   - Getting Started: index.md
   - Core Concepts: concepts.md
+  - Case Study - BACE-1: case_study_bace.md
   - API Reference:
       - Models: api/models.md
       - Acquisition: api/acquisition.md

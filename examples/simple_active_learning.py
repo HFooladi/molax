@@ -2,6 +2,11 @@
 
 Key insight: Batch ALL training data once, use index masking for active learning.
 This avoids JIT recompilation from changing shapes.
+
+Protocol note: the model is re-initialized at the start of every acquisition
+round. Warm-starting one model across rounds would give later rounds a larger
+cumulative training budget than earlier ones, so the reported RMSE would
+improve partly because of extra gradient steps rather than extra data.
 """
 
 import time
@@ -49,15 +54,20 @@ n_test_nodes = all_test_graphs.nodes.shape[0]
 n_test_edges = all_test_graphs.edges.shape[0]
 print(f"Test batch: {n_test_nodes} nodes, {n_test_edges} edges")
 
-# Create model
+# Model factory - called fresh each acquisition round
 config = GCNConfig(
     node_features=train_data.n_node_features,
     hidden_features=[64, 64],
     out_features=1,
     dropout_rate=0.1,
 )
-model = UncertaintyGCN(config, nnx.Rngs(0))
-optimizer = nnx.Optimizer(model, optax.adam(LEARNING_RATE), wrt=nnx.Param)
+
+
+def create_model_and_optimizer(seed: int):
+    """Build a freshly initialized model and its optimizer."""
+    model = UncertaintyGCN(config, nnx.Rngs(seed))
+    optimizer = nnx.Optimizer(model, optax.adam(LEARNING_RATE), wrt=nnx.Param)
+    return model, optimizer
 
 
 # JIT-compiled training step with masking
@@ -111,14 +121,15 @@ pool_mask = ~labeled_mask
 
 print(f"\nInitial: {int(labeled_mask.sum())} labeled, {int(pool_mask.sum())} pool")
 
-# Warmup JIT
+# Warmup JIT on a throwaway model so the loop below times cleanly
 print("\nJIT warmup...")
 start = time.time()
+warmup_model, warmup_opt = create_model_and_optimizer(0)
 _ = train_step_masked(
-    model, optimizer, all_train_graphs, all_train_labels, labeled_mask
+    warmup_model, warmup_opt, all_train_graphs, all_train_labels, labeled_mask
 )
-_ = eval_step(model, all_test_graphs, all_test_labels)
-_ = get_uncertainties(model, all_train_graphs)
+_ = eval_step(warmup_model, all_test_graphs, all_test_labels)
+_ = get_uncertainties(warmup_model, all_train_graphs)
 print(f"JIT compilation: {time.time() - start:.2f}s")
 
 # Active learning loop
@@ -127,6 +138,10 @@ total_start = time.time()
 
 for iteration in range(N_ITERATIONS):
     iter_start = time.time()
+
+    # Fresh model each round, so RMSE reflects acquired data rather than
+    # accumulated gradient steps
+    model, optimizer = create_model_and_optimizer(iteration)
 
     # Train
     for epoch in range(N_EPOCHS):

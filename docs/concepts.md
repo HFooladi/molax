@@ -88,8 +88,9 @@ jraph.GraphsTuple (batched - all molecules as one big graph)
 ```python
 from molax.utils.data import MolecularDataset
 
-# Load dataset
-dataset = MolecularDataset('datasets/esol.csv')
+# Load dataset. features='rich' gives 29-dim one-hot atom features; the
+# 6-dim default does not improve with more data.
+dataset = MolecularDataset('datasets/esol.csv', features='rich')
 train_data, test_data = dataset.split(test_size=0.2, seed=42)
 
 # Batch for training (do this once!)
@@ -150,7 +151,7 @@ molax provides three approaches to uncertainty quantification:
 from molax.models.gcn import GCNConfig, UncertaintyGCN
 
 config = GCNConfig(
-    node_features=6,
+    node_features=dataset.n_node_features,
     hidden_features=[64, 64],
     out_features=1,
     dropout_rate=0.1,
@@ -172,7 +173,7 @@ mean, var = model(graphs, training=True)  # training=True enables dropout
 from molax.models.ensemble import EnsembleConfig, DeepEnsemble
 
 config = EnsembleConfig(
-    node_features=6,
+    node_features=dataset.n_node_features,
     hidden_features=[64, 64],
     out_features=1,
     n_members=5,
@@ -193,7 +194,7 @@ mean, epistemic_var, aleatoric_var = ensemble(graphs, training=False)
 from molax.models.evidential import EvidentialConfig, EvidentialGCN
 
 config = EvidentialConfig(
-    node_features=6,
+    node_features=dataset.n_node_features,
     hidden_features=[64, 64],
     out_features=1,
 )

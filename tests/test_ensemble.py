@@ -70,6 +70,36 @@ class TestDeepEnsemble:
                     f"Members {i} and {j} have identical weights"
                 )
 
+    def test_different_rngs_give_different_ensembles(self, ensemble_config):
+        """The `rngs` argument must actually seed the ensemble.
+
+        Regression test: __init__ previously hardcoded nnx.Rngs(i) per member
+        and ignored `rngs` entirely, so every ensemble built from the same
+        config was bit-identical regardless of the seed passed in.
+        """
+        a = DeepEnsemble(ensemble_config, rngs=nnx.Rngs(0))
+        b = DeepEnsemble(ensemble_config, rngs=nnx.Rngs(999))
+
+        assert not jnp.allclose(
+            a.members[0].conv_layers[0].linear.kernel[...],
+            b.members[0].conv_layers[0].linear.kernel[...],
+        ), "different seeds produced identical ensembles"
+
+    def test_same_rngs_are_reproducible(self, ensemble_config):
+        """Same seed must reproduce the same ensemble exactly."""
+        a = DeepEnsemble(ensemble_config, rngs=nnx.Rngs(7))
+        b = DeepEnsemble(ensemble_config, rngs=nnx.Rngs(7))
+
+        for i in range(len(a.members)):
+            assert jnp.allclose(
+                a.members[i].conv_layers[0].linear.kernel[...],
+                b.members[i].conv_layers[0].linear.kernel[...],
+            ), f"member {i} not reproducible across identical seeds"
+
+
+class TestDeepEnsembleForward:
+    """Tests for DeepEnsemble forward pass."""
+
     def test_returns_three_outputs(self, ensemble, batched_graphs):
         """Test that forward pass returns mean, total_var, epistemic_var."""
         mean, total_var, epistemic_var = ensemble(batched_graphs)

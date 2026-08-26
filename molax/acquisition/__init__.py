@@ -16,6 +16,7 @@ BALD (Mutual Information):
 Diversity-based:
 - diversity_sampling: Greedy farthest point sampling
 - coreset_sampling: K-center greedy in embedding space
+- coreset_from_embeddings: K-center greedy over precomputed embeddings
 
 Batch-aware:
 - batch_bald_sampling: BatchBALD for diverse informative batches
@@ -43,6 +44,7 @@ from .batch_aware import (
     dpp_sampling,
 )
 from .coreset import (
+    coreset_from_embeddings,
     coreset_sampling,
     coreset_sampling_with_scores,
 )
@@ -79,6 +81,7 @@ __all__ = [
     # Core-Set
     "coreset_sampling",
     "coreset_sampling_with_scores",
+    "coreset_from_embeddings",
     # Batch-aware
     "batch_bald_sampling",
     "dpp_sampling",

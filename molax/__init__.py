@@ -43,7 +43,15 @@ from .models import (
 )
 
 # Data utilities
-from .utils import MolecularDataset, batch_graphs, smiles_to_jraph, unbatch_graphs
+from .utils import (
+    ATOM_FEATURIZERS,
+    AtomFeaturizer,
+    MolecularDataset,
+    batch_graphs,
+    get_atom_featurizer,
+    smiles_to_jraph,
+    unbatch_graphs,
+)
 
 __all__ = [
     "__version__",
@@ -78,6 +86,9 @@ __all__ = [
     "smiles_to_jraph",
     "batch_graphs",
     "unbatch_graphs",
+    "ATOM_FEATURIZERS",
+    "AtomFeaturizer",
+    "get_atom_featurizer",
     # Metrics
     "expected_calibration_error",
     "evaluate_calibration",

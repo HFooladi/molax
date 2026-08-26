@@ -1,14 +1,19 @@
 """Tests for Core-Set acquisition functions."""
 
 import flax.nnx as nnx
+import jax
 import jax.numpy as jnp
 import pytest
 
-from molax.acquisition.coreset import coreset_sampling, coreset_sampling_with_scores
+from molax.acquisition.coreset import (
+    coreset_from_embeddings,
+    coreset_sampling,
+    coreset_sampling_with_scores,
+)
 from molax.models.ensemble import DeepEnsemble, EnsembleConfig
 from molax.models.evidential import EvidentialConfig, EvidentialGCN
 from molax.models.gcn import GCNConfig, UncertaintyGCN
-from molax.utils.data import smiles_to_jraph
+from molax.utils.data import batch_graphs, smiles_to_jraph
 
 
 @pytest.fixture
@@ -175,3 +180,91 @@ class TestCoreSetSamplingWithScores:
 
         scores = coreset_sampling_with_scores(gcn_model, pool, [])
         assert jnp.all(jnp.isinf(scores))
+
+
+class TestCoresetFromEmbeddings:
+    """Tests for the index-based k-center greedy helper."""
+
+    def test_returns_indices_into_full_array(self):
+        """Selected indices index the full array, not the pool subset."""
+        embeddings = jnp.array(
+            [[0.0, 0.0], [10.0, 0.0], [0.0, 10.0], [10.0, 10.0], [0.1, 0.1]]
+        )
+        pool_mask = jnp.array([False, True, True, True, True])
+
+        selected = coreset_from_embeddings(embeddings, pool_mask, n_select=2)
+
+        assert len(selected) == 2
+        assert all(0 <= i < embeddings.shape[0] for i in selected)
+        assert 0 not in selected, "labeled point was selected"
+
+    def test_never_selects_labeled_points(self):
+        embeddings = jax.random.normal(jax.random.PRNGKey(0), (20, 8))
+        pool_mask = jnp.arange(20) >= 5  # first 5 are labeled
+
+        selected = coreset_from_embeddings(embeddings, pool_mask, n_select=10)
+
+        assert len(selected) == 10
+        assert len(set(selected)) == 10, "duplicate selections"
+        assert all(i >= 5 for i in selected)
+
+    def test_picks_far_points_first(self):
+        """The point furthest from the labeled set must be selected first."""
+        embeddings = jnp.array([[0.0, 0.0], [1.0, 0.0], [50.0, 0.0]])
+        pool_mask = jnp.array([False, True, True])
+
+        selected = coreset_from_embeddings(embeddings, pool_mask, n_select=1)
+
+        assert selected == [2]
+
+    def test_covers_distinct_clusters(self):
+        """With no labeled data, greedy should spread across clusters."""
+        embeddings = jnp.array(
+            [
+                [0.0, 0.0],
+                [0.1, 0.1],
+                [20.0, 0.0],
+                [20.1, 0.1],
+                [0.0, 20.0],
+                [0.1, 20.1],
+            ]
+        )
+        pool_mask = jnp.ones(6, dtype=bool)
+
+        selected = coreset_from_embeddings(embeddings, pool_mask, n_select=3)
+
+        clusters = {i // 2 for i in selected}
+        assert clusters == {0, 1, 2}, f"did not cover all clusters: {selected}"
+
+    def test_empty_pool_returns_empty(self):
+        embeddings = jnp.zeros((4, 3))
+        assert coreset_from_embeddings(embeddings, jnp.zeros(4, dtype=bool), 2) == []
+
+    def test_clamps_to_pool_size(self):
+        embeddings = jax.random.normal(jax.random.PRNGKey(1), (6, 4))
+        pool_mask = jnp.array([True, True, False, False, False, False])
+
+        selected = coreset_from_embeddings(embeddings, pool_mask, n_select=99)
+
+        assert len(selected) == 2
+
+    def test_matches_graph_based_coreset(self, gcn_model, sample_graphs):
+        """The two entry points must agree, since they share an implementation."""
+        pool_graphs, labeled_graphs = sample_graphs[:6], sample_graphs[6:]
+        n_pool = len(pool_graphs)
+
+        pool_emb = gcn_model.extract_embeddings(
+            batch_graphs(pool_graphs), training=False
+        )[:n_pool]
+        lab_emb = gcn_model.extract_embeddings(
+            batch_graphs(labeled_graphs), training=False
+        )[: len(labeled_graphs)]
+        embeddings = jnp.concatenate([pool_emb, lab_emb], axis=0)
+        pool_mask = jnp.arange(embeddings.shape[0]) < n_pool
+
+        via_graphs = coreset_sampling(
+            gcn_model, pool_graphs, labeled_graphs, n_select=3
+        )
+        via_embeddings = coreset_from_embeddings(embeddings, pool_mask, n_select=3)
+
+        assert via_graphs == via_embeddings
