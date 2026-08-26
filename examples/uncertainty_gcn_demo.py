@@ -7,6 +7,8 @@ This script shows how to:
 3. Interpret uncertainty in predictions
 """
 
+from pathlib import Path
+
 import flax.nnx as nnx
 import jax.numpy as jnp
 import jraph
@@ -109,10 +111,14 @@ ax.set_title("UncertaintyGCN Predictions with 95% Confidence Intervals")
 ax.grid(axis="y", alpha=0.3)
 
 plt.tight_layout()
-plt.savefig("examples/uncertainty_demo.png", dpi=150)
+# Write next to the other example plots, and resolve relative to this file so
+# the demo works from any working directory.
+OUTPUT_PATH = Path(__file__).parent / "assets" / "uncertainty_demo.png"
+OUTPUT_PATH.parent.mkdir(exist_ok=True)
+plt.savefig(OUTPUT_PATH, dpi=150)
 plt.close()
 
-print("Saved visualization to 'examples/uncertainty_demo.png'")
+print(f"Saved visualization to '{OUTPUT_PATH}'")
 
 print("\n" + "=" * 60)
 print("Demo completed successfully!")
