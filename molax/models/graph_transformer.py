@@ -14,6 +14,8 @@ import jax.numpy as jnp
 import jraph
 import optax
 
+from .bounds import bound_log_var
+
 
 @dataclass
 class GraphTransformerConfig:
@@ -535,8 +537,9 @@ class UncertaintyGraphTransformer(nnx.Module):
         mean = self.mean_head(pooled)
         log_var = self.var_head(pooled)
 
-        # Clip log_var to prevent variance explosion (variance in range [0.01, 100])
-        log_var = jnp.clip(log_var, -4.6, 4.6)
+        # Keep variance in ~[0.01, 100] without making saturation permanent.
+        # See molax/models/bounds.py for why this is not a plain jnp.clip.
+        log_var = bound_log_var(log_var)
 
         # Return mean and variance (exp for positivity)
         return mean, jnp.exp(log_var)

@@ -202,7 +202,7 @@ def main():
         print("Dataset not found. Run: python scripts/download_esol.py")
         return
 
-    dataset = MolecularDataset(DATASET_PATH)
+    dataset = MolecularDataset(DATASET_PATH, features="rich")
     train_data, test_data = dataset.split(test_size=0.2, seed=SEED)
     train_data, val_data = train_data.split(test_size=0.2, seed=SEED)
 

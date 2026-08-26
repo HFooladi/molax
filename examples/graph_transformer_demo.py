@@ -47,7 +47,7 @@ print("=" * 60)
 
 # Load dataset
 print("\nLoading ESOL dataset...")
-dataset = MolecularDataset(DATASET_PATH)
+dataset = MolecularDataset(DATASET_PATH, features="rich")
 train_data, test_data = dataset.split(test_size=0.2, seed=42)
 print(f"Train: {len(train_data)} molecules, Test: {len(test_data)} molecules")
 

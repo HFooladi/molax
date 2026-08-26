@@ -45,7 +45,7 @@ print(f"JAX backend: {jax.default_backend()}")
 print(f"Ensemble members: {N_ENSEMBLE_MEMBERS}")
 
 # Load dataset
-dataset = MolecularDataset(DATASET_PATH)
+dataset = MolecularDataset(DATASET_PATH, features="rich")
 train_data, test_data = dataset.split(test_size=0.2, seed=42)
 print(f"Train: {len(train_data)}, Test: {len(test_data)}")
 
@@ -242,11 +242,18 @@ total_gt_epistemic = all(t >= e for t, e in zip(total_uncs, epistemic_uncs))
 status = "PASS" if total_gt_epistemic else "FAIL"
 print(f"[{status}] Total uncertainty >= Epistemic uncertainty")
 
-# 4. Learning is happening (loss should decrease, RMSE should improve from baseline)
-baseline_rmse = 2.5  # Approximate baseline without training
+# 4. Learning is happening: the model must beat the mean predictor.
+# Compute this rather than hardcoding it -- a hardcoded 2.5 would pass a model
+# at RMSE 2.4, which is actually WORSE than predicting the training mean (2.13).
+baseline_rmse = float(
+    jnp.sqrt(jnp.mean((all_test_labels - jnp.mean(all_train_labels)) ** 2))
+)
 learned = final_rmse < baseline_rmse
 status = "PASS" if learned else "FAIL"
-print(f"[{status}] Model learns (RMSE {final_rmse:.4f} < baseline ~{baseline_rmse})")
+print(
+    f"[{status}] Model beats mean predictor "
+    f"(RMSE {final_rmse:.4f} < baseline {baseline_rmse:.4f})"
+)
 
 print("\n" + "=" * 60)
 if rmse_decreasing and epistemic_decreasing and total_gt_epistemic and learned:

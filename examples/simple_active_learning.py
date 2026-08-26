@@ -7,6 +7,12 @@ Protocol note: the model is re-initialized at the start of every acquisition
 round. Warm-starting one model across rounds would give later rounds a larger
 cumulative training budget than earlier ones, so the reported RMSE would
 improve partly because of extra gradient steps rather than extra data.
+
+Two consequences of doing that correctly: each round must train to convergence
+from scratch (N_EPOCHS=400, not 50 -- at 50 a fresh model does not even reach
+the mean-predictor baseline), and the "rich" featurizer is required, because
+with the 6-dim default this model plateaus at RMSE ~2.00 no matter how much
+data it is given.
 """
 
 import time
@@ -24,7 +30,8 @@ from molax.utils.data import MolecularDataset
 
 # Configuration
 DATASET_PATH = Path(__file__).parent.parent / "datasets" / "esol.csv"
-N_EPOCHS = 50
+FEATURES = "rich"  # the 6-dim default does not improve with more data
+N_EPOCHS = 400  # a freshly initialized model needs this to converge
 LEARNING_RATE = 1e-3
 INITIAL_POOL_FRACTION = 0.05
 SAMPLES_PER_ITERATION = 50
@@ -36,7 +43,7 @@ print("=" * 60)
 print(f"JAX backend: {jax.default_backend()}")
 
 # Load dataset
-dataset = MolecularDataset(DATASET_PATH)
+dataset = MolecularDataset(DATASET_PATH, features=FEATURES)
 train_data, test_data = dataset.split(test_size=0.2, seed=42)
 print(f"Train: {len(train_data)}, Test: {len(test_data)}")
 
@@ -121,6 +128,13 @@ pool_mask = ~labeled_mask
 
 print(f"\nInitial: {int(labeled_mask.sum())} labeled, {int(pool_mask.sum())} pool")
 
+# The number every iteration has to beat. If RMSE sits above this, the model is
+# not learning and the acquisition strategy is not being tested at all.
+baseline_rmse = float(
+    jnp.sqrt(jnp.mean((all_test_labels - jnp.mean(all_train_labels)) ** 2))
+)
+print(f"Mean-predictor baseline RMSE: {baseline_rmse:.4f}")
+
 # Warmup JIT on a throwaway model so the loop below times cleanly
 print("\nJIT warmup...")
 start = time.time()
@@ -176,3 +190,8 @@ total_time = time.time() - total_start
 print("=" * 60)
 print(f"Total time: {total_time:.1f}s ({total_time / N_ITERATIONS:.1f}s per iteration)")
 print(f"Final: {int(labeled_mask.sum())} labeled, RMSE={float(rmse):.4f}")
+print(f"Baseline (predict training mean): {baseline_rmse:.4f}")
+if float(rmse) < baseline_rmse:
+    print("Model beats the mean predictor.")
+else:
+    print("WARNING: model is no better than predicting the mean.")
