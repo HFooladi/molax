@@ -8,6 +8,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Rich atom featurizer** (`molax/utils/featurizers.py`)
+  - `ATOM_FEATURIZERS` registry with named featurizers and declared output widths
+  - `"rich"`: 29-dim one-hot encoding (element, degree, total H, hybridization,
+    aromatic, in-ring, formal charge)
+  - `"basic"`: the original six raw descriptors, unchanged and still the default
+  - `smiles_to_jraph(smiles, features=...)` and `MolecularDataset(..., features=...)`
+  - `AtomFeaturizer`, `get_atom_featurizer` exported from `molax`
+  - Read the width via `ATOM_FEATURIZERS[name].dim` instead of hardcoding it
+  - On ESOL (`UncertaintyGCN`, hidden `[128,128,128]`, 1500 epochs, seed 42;
+    mean-predictor baseline 2.13): `"basic"` 1.33 vs `"rich"` 0.92
+
+- **BACE-1 drug discovery case study** (`examples/bace_lead_optimization.py`)
+  - Simulates Design-Make-Test-Analyze rounds under a fixed assay budget against
+    BACE-1 (beta-secretase 1), 1513 inhibitors with pIC50
+  - Bemis-Murcko scaffold split; model re-initialized each round; label
+    standardization fitted on the labeled set only
+  - Scores **hit enrichment** (top-k potent compounds recovered), not just RMSE
+  - Compares random / uncertainty / greedy / UCB / uncertainty+diversity
+  - `scripts/download_bace.py` and `datasets/bace.csv`
+  - Writeup at `docs/case_study_bace.md`
+
+- **`coreset_from_embeddings`** (`molax/acquisition/coreset.py`)
+  - Index-based k-center greedy over a precomputed embedding matrix, for use with
+    a pre-batched `GraphsTuple` driven by a boolean mask (no re-batching, so no
+    JIT recompilation). `coreset_sampling` now delegates to it.
+
+- **Flax API guardrails** (`tests/test_flax_compat.py`)
+  - Pins the NNX patterns molax relies on (`nnx.Optimizer(..., wrt=nnx.Param)`,
+    two-argument `optimizer.update`, `nnx.List` tracking, `variable[...]` access)
+    and fails on any `DeprecationWarning` during a training step.
+  - Verified against flax 0.12.2 / jax 0.9.0 / optax 0.2.6.
+
 - **Graph Attention Network (GAT)** (`molax/models/gat.py`)
   - `UncertaintyGAT` model with multi-head attention for adaptive neighbor weighting
   - `GATConfig` with configurable n_heads, edge_features, attention_dropout_rate
@@ -26,10 +58,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Comprehensive tests (32 tests) and demo example
 
 ### Changed
+- Atom featurizer is now selectable; the `"basic"` default is byte-for-byte
+  unchanged, so existing code and saved models are unaffected.
+- Active learning examples re-initialize the model every round. Warm-starting one
+  model across rounds gave later rounds a larger cumulative training budget, so
+  the curves measured training time as much as data efficiency. This requires
+  training to convergence each round (`N_EPOCHS` raised accordingly).
+- `examples/active_learning_benchmark.py` and `examples/simple_active_learning.py`
+  use the `"rich"` featurizer and print the mean-predictor baseline the curve must
+  beat. With `"basic"` the model plateaus at RMSE ~2.00 given 5%, 25% or 50% of
+  ESOL (2.02 / 2.01 / 2.03) -- worse than predicting the training mean (2.13) --
+  so acquisition strategies could not be meaningfully compared.
+- Model demos (`mpnn`, `gat`, `graph_transformer`, `ensemble_active_learning`,
+  `evidential_active_learning`, `calibration_comparison`) use `"rich"` features.
+- `examples/uncertainty_gcn_demo.py` writes its plot to `examples/assets/`
+  (resolved relative to `__file__`) instead of `examples/`.
 
 ### Fixed
+- **Variance heads could be permanently dead** in `UncertaintyMPNN`,
+  `UncertaintyGAT` and `UncertaintyGraphTransformer`. They bounded `log_var` with
+  `jnp.clip(log_var, -4.6, 4.6)`, which has exactly zero gradient outside its
+  range, making saturation an absorbing state. MPNN fell in completely: every
+  molecule pinned at `exp(4.6) = 99.484` with a `var_head` gradient of exactly
+  `0.0`, so `mpnn_demo` reported an identical std dev of 9.974 for all molecules.
+  Replaced with a leaky clip (`molax/models/bounds.py`) -- identity inside the
+  range, small constant slope outside -- so a saturated head always recovers.
+  (`tanh` is not sufficient: its derivative underflows to zero in float32 below
+  the magnitudes actually observed.)
+- **`DeepEnsemble` ignored its `rngs` argument**, hardcoding `nnx.Rngs(i)` per
+  member, so two ensembles built from different seeds were bit-identical.
+- **`examples/active_learning_benchmark.py` plotted three curves for two
+  strategies** -- the `"combined"` branch was a verbatim copy of `"uncertainty"`.
+  It now combines uncertainty with Core-Set diversity.
+- `examples/ensemble_active_learning.py` hardcoded `baseline_rmse = 2.5` in its
+  sanity check, so a model at RMSE 2.4 reported PASS while being worse than
+  predicting the mean (2.13). Now computed from the data.
 
 ### Removed
+- Untracked a scratch notebook and four regenerable example plots that had been
+  committed by accident; added `.gitignore` entries. The files remain on disk.
 
 ---
 
